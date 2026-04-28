@@ -1,6 +1,7 @@
 # Mebel — Deploy guide (Ubuntu 22.04 / 24.04)
 
 End-to-end recipe to bring the storefront live on a fresh Ubuntu droplet:
+
 - Docker Compose stack: **postgres + fastapi + nginx (with built React bundle)**
 - HTTPS via Let's Encrypt (certbot, host nginx)
 - TimeWeb Cloud Storage (S3-compatible) for product images
@@ -81,17 +82,17 @@ $EDITOR backend/.env
 
 Fill in:
 
-| key | value |
-| --- | --- |
-| `JWT_SECRET` | `python -c "import secrets; print(secrets.token_urlsafe(64))"` |
-| `CORS_ORIGINS` | `https://your-domain.tld` (no trailing slash) |
-| `BOOTSTRAP_ADMIN_PASSWORD` | strong password — rotated on first login |
-| `VAPID_*` | run inside container after first build: `docker compose run --rm api python -m app.gen_vapid` and paste output |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TimeWeb keys |
-| `AWS_REGION` | `ru-1` (TimeWeb default) |
-| `S3_BUCKET` | your bucket name |
-| `S3_ENDPOINT_URL` | `https://s3.twcstorage.ru` |
-| `S3_PUBLIC_URL_PREFIX` | `https://s3.twcstorage.ru/<bucket>` |
+| key                                               | value                                                                                                           |
+| ------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `JWT_SECRET`                                    | `python -c "import secrets; print(secrets.token_urlsafe(64))"`                                                |
+| `CORS_ORIGINS`                                  | `https://your-domain.tld` (no trailing slash)                                                                 |
+| `BOOTSTRAP_ADMIN_PASSWORD`                      | strong password — rotated on first login                                                                       |
+| `VAPID_*`                                       | run inside container after first build:`docker compose run --rm api python -m app.gen_vapid` and paste output |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TimeWeb keys                                                                                                    |
+| `AWS_REGION`                                    | `ru-1` (TimeWeb default)                                                                                      |
+| `S3_BUCKET`                                     | your bucket name                                                                                                |
+| `S3_ENDPOINT_URL`                               | `https://s3.twcstorage.ru`                                                                                    |
+| `S3_PUBLIC_URL_PREFIX`                          | `https://s3.twcstorage.ru/<bucket>`                                                                           |
 
 **Do not commit** either `.env` — both are in `.gitignore`.
 
@@ -136,6 +137,7 @@ If you want to test the live server before the domain DNS is ready (e.g.
 3. Visit `http://72.56.33.218/` directly.
 
 **Caveats while running on a bare IP**:
+
 - **Web Push won't work** — browsers gate `PushManager` to HTTPS-or-localhost.
   Once the domain + TLS land, push starts working without any code change.
 - Service workers similarly require HTTPS, so the offline-style chat
@@ -208,15 +210,15 @@ Certbot rewrites the nginx config to serve TLS and adds a renew cron.
 
 ## 6. Day-2 ops
 
-| task | command |
-| --- | --- |
-| Pull new code | `git pull && docker compose build && docker compose up -d` |
-| Apply DB migrations | `docker compose run --rm api alembic upgrade head` |
-| Seed catalog (one-shot) | `docker compose run --rm api python -m app.seed` &nbsp;then on a workstation: `npm run seed` |
-| Backup postgres | `docker compose exec db pg_dump -U mebel mebel | gzip > backup-$(date +%F).sql.gz` |
-| Tail logs | `docker compose logs -f` |
-| Restart api | `docker compose restart api` |
-| VAPID key rotation | regenerate, paste into `backend/.env`, restart api — every browser will re-prompt for notifications |
+| task                             | command                                                                                                                                                                                                                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pull new code                    | `git pull && docker compose build && docker compose up -d`                                                                                                                                                                                                                       |
+| Apply DB migrations              | `docker compose run --rm api alembic upgrade head`                                                                                                                                                                                                                               |
+| Seed catalog (one-shot)          | `docker compose run --rm api python -m app.seed` &nbsp;then on a workstation: `npm run seed`                                                                                                                                                                                   |
+| Backup postgres                  | `docker compose exec db pg_dump -U mebel mebel                                                                                                                                                                                                                                     |
+| Tail logs                        | `docker compose logs -f`                                                                                                                                                                                                                                                         |
+| Restart api                      | `docker compose restart api`                                                                                                                                                                                                                                                     |
+| VAPID key rotation               | regenerate, paste into `backend/.env`, restart api — every browser will re-prompt for notifications                                                                                                                                                                             |
 | Reset a forgotten admin password | `docker compose exec api python -c "from app.database import SessionLocal; from app.models import User; from app.security import hash_password; db=SessionLocal(); u=db.query(User).filter_by(name='admin').one(); u.password_hash=hash_password('new-strong-pw'); db.commit()"` |
 
 ---
