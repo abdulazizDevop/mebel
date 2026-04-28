@@ -1,0 +1,13 @@
+node_modules
+dist
+.git
+.venv
+backend/.venv
+backend/dev.db
+backend/uploads
+.env
+.env.local
+*.log
+.DS_Store
+.orchids
+.vscode

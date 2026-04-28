@@ -1,0 +1,133 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg: 249 247 242;
+  --color-surface: 255 255 255;
+  --color-primary: 0 0 0;
+  --color-primary-inv: 255 255 255;
+  --color-text: 0 0 0;
+}
+
+.dark {
+  --color-bg: 17 17 17;
+  --color-surface: 28 28 30;
+  --color-primary: 255 255 255;
+  --color-primary-inv: 17 17 17;
+  --color-text: 245 245 245;
+}
+
+@layer base {
+  body {
+    @apply antialiased;
+    color: rgb(var(--color-text));
+    transition: color 0.5s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+    text-transform: capitalize;
+  }
+}
+
+/* Light mode — animated gradient background */
+body {
+  background: linear-gradient(315deg, rgba(101,0,94,1) 3%, rgba(60,132,206,1) 38%, rgba(48,238,226,1) 68%, rgba(255,25,25,1) 98%);
+  animation: gradient 15s ease infinite;
+  background-size: 400% 400%;
+  background-attachment: fixed;
+}
+
+/* Dark mode — solid black */
+.dark body {
+  background: #111111;
+  animation: none;
+  background-size: auto;
+}
+
+@keyframes gradient {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+/* Waves — only visible in light mode */
+.wave {
+  background: rgb(255 255 255 / 25%);
+  border-radius: 1000% 1000% 0 0;
+  position: fixed;
+  width: 200%;
+  height: 12em;
+  animation: wave 10s -3s linear infinite;
+  transform: translate3d(0, 0, 0);
+  opacity: 0.8;
+  bottom: 0;
+  left: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.wave:nth-of-type(2) {
+  bottom: -1.25em;
+  animation: wave 18s linear reverse infinite;
+  opacity: 0.8;
+}
+
+.wave:nth-of-type(3) {
+  bottom: -2.5em;
+  animation: wave 20s -1s reverse infinite;
+  opacity: 0.9;
+}
+
+.dark .wave {
+  display: none;
+}
+
+@keyframes wave {
+  2% { transform: translateX(1); }
+  25% { transform: translateX(-25%); }
+  50% { transform: translateX(-50%); }
+  75% { transform: translateX(-25%); }
+  100% { transform: translateX(1); }
+}
+
+.pill {
+  @apply rounded-pill;
+}
+
+/* Allow uppercase override on headings */
+h1.\!uppercase, h2.\!uppercase, h3.\!uppercase,
+h4.\!uppercase, h5.\!uppercase, h6.\!uppercase {
+  text-transform: uppercase;
+}
+
+/* Hide scrollbar for horizontal scroll sections */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Animated gradient for title text in dark mode */
+.animate-title-gradient {
+  animation: title-gradient 8s ease infinite;
+}
+
+@keyframes title-gradient {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 100% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+/* Blinking cursor for search */
+@keyframes blink {
+  0%, 50%, 100% { opacity: 1; }
+  25%, 75% { opacity: 0; }
+}
+
+.animate-blink-cursor {
+  animation: blink 0.8s step-end infinite;
+}
