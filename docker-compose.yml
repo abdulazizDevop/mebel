@@ -46,7 +46,10 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "80:80"
+      # Bind only to loopback — the host's nginx in deploy/nginx-host.conf
+      # owns port 80/443 and reverse-proxies to us. This frees up 80 for
+      # certbot's HTTP-01 challenge during cert issuance / renewal.
+      - "127.0.0.1:8080:80"
 
 volumes:
   mebel_pgdata:
