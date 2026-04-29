@@ -11,6 +11,7 @@ import { Chat } from './pages/Chat';
 import { StoreProvider } from './store/useStore';
 import { ThemeProvider } from './context/ThemeContext';
 import { CartSidebar } from './components/CartSidebar';
+import { UpdateBanner } from './components/UpdateBanner';
 
 const pageVariants = {
   initial: { opacity: 0, y: 24, scale: 0.99 },
@@ -59,6 +60,11 @@ function App() {
     <ThemeProvider>
       <StoreProvider>
         <Router>
+          {/* PWA: registers /sw.js and shows a small banner when a new
+              bundle has been deployed. One tap on "Обновить" swaps the new
+              service worker into control and reloads — no reinstall, no
+              "remove from Home Screen" needed. */}
+          <UpdateBanner />
           <Layout>
             <AnimatedRoutes />
             <CartSidebar />
