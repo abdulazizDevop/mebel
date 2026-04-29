@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, ShoppingBag, ChevronLeft, ChevronRight, Check, X, Pipette } from 'lucide-react';
+import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check, X, Pipette } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useStore } from '../store/useStore';
 import { LiquidButton } from '../components/LiquidButton';
@@ -62,17 +62,13 @@ export function ProductDetail() {
   const currentVariant = product.colorVariants[activeColor];
   const currentImage = currentVariant?.image || product.image;
 
-  // Thumbnails: use per-color photos if available, else generate crops
-  const variantPhotos = (currentVariant as any)?.photos as string[] | undefined;
-  const thumbs = (variantPhotos && variantPhotos.length > 1)
-    ? variantPhotos
-    : [
-        `${currentImage}&fit=crop&crop=center`,
-        `${currentImage}&fit=crop&crop=top`,
-        `${currentImage}&fit=crop&crop=left`,
-        `${currentImage}&fit=crop&crop=bottom`,
-        `${currentImage}&fit=crop&crop=right`,
-      ];
+  // Thumbnails: use per-color photos when the admin uploaded several. The
+  // legacy fallback (`${url}&fit=crop&crop=…`) was an Unsplash trick that
+  // breaks for the S3-backed catalog (the suffixed URL 404/403s on S3),
+  // so we just show the single available image when there's no proper
+  // multi-photo gallery.
+  const variantPhotos = currentVariant?.photos;
+  const thumbs = variantPhotos && variantPhotos.length > 0 ? variantPhotos : [currentImage];
 
   const handleColorChange = (index: number) => {
     setActiveColor(index);
@@ -105,10 +101,19 @@ export function ProductDetail() {
         )}
       </AnimatePresence>
 
-      {/* Favourite toggle in the top-right; back navigation lives in the bottom navbar. */}
-      <div className="flex justify-end items-center mb-4 sm:mb-6">
+      {/* Top row: explicit back button on the left (catalog history is a
+          breadcrumb the user expects), favourite toggle on the right. */}
+      <div className="flex justify-between items-center mb-4 sm:mb-6">
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="Назад"
+          className="bg-surface/80 backdrop-blur-sm p-2.5 sm:p-3 rounded-full shadow-sm hover:shadow-md transition-shadow"
+        >
+          <ArrowLeft size={20} />
+        </button>
         <button
           onClick={() => product && toggleFavorite(product.id)}
+          aria-label="В избранное"
           className="bg-surface/80 backdrop-blur-sm p-2.5 sm:p-3 rounded-full shadow-sm hover:shadow-md transition-shadow"
         >
           <Star

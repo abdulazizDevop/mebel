@@ -54,10 +54,26 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
   // Read the file into a data URL so <img> can render it. Revoking the
   // ObjectURL would invalidate the rendered image, so we keep it for the
   // lifetime of the modal and let GC clean up on unmount.
+  //
+  // Safari occasionally fails to load `blob:` URLs in iframes / private
+  // browsing — the FileReader fallback below is more reliable on iOS.
   useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setImageSrc(url);
-    return () => URL.revokeObjectURL(url);
+    let cancelled = false;
+    try {
+      const url = URL.createObjectURL(file);
+      setImageSrc(url);
+      return () => {
+        cancelled = true;
+        URL.revokeObjectURL(url);
+      };
+    } catch {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (!cancelled && typeof reader.result === 'string') setImageSrc(reader.result);
+      };
+      reader.readAsDataURL(file);
+      return () => { cancelled = true; };
+    }
   }, [file]);
 
   const onImageLoad: React.ReactEventHandler<HTMLImageElement> = (e) => {
@@ -172,8 +188,8 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
           )}
         </div>
 
-        {/* Buttons */}
-        <div className="flex gap-2">
+        {/* Buttons row 1 — primary actions */}
+        <div className="flex gap-2 mb-2">
           <button
             type="button"
             onClick={onCancel}
@@ -195,6 +211,16 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
             <Check size={16} /> {busy ? 'Обработка…' : 'Сохранить'}
           </button>
         </div>
+        {/* Bypass — useful when Safari has trouble loading the image into
+            the crop UI, or when the user just wants to upload as-is. */}
+        <button
+          type="button"
+          onClick={() => onConfirm(file)}
+          disabled={busy}
+          className="w-full text-xs opacity-60 hover:opacity-100 underline transition-opacity"
+        >
+          Загрузить без обрезки
+        </button>
       </div>
     </div>
   );
