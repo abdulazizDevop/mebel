@@ -3,13 +3,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, CheckCircle, Bell, MessageCircle, Send, ArrowLeft, Plus, Trash2,
-  Edit3, X, Save, Check, Settings, Upload,
+  Edit3, X, Save, Check, Settings, Upload, Camera,
   Pipette, BarChart3, Users, ShoppingCart, Heart, Eye, Calendar,
   Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound
 } from 'lucide-react';
 import { useStore, Order, RecommendationCategory, ALL_SECTIONS, SectionName } from '../store/useStore';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
+import { ImageCropModal } from '../components/ImageCropModal';
 import {
   createAdminUser as apiCreateAdminUser,
   deleteAdminUser as apiDeleteAdminUser,
@@ -179,41 +180,56 @@ function ProductForm({
     }));
   });
 
-  // Upload chosen files to /uploads/image (S3 or local-disk fallback) and
-  // append the resulting public URLs. Replaces the legacy
-  // FileReader.readAsDataURL flow that crammed base64 blobs into the DB.
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
-    e.target.value = '';
-    for (const file of Array.from(files)) {
-      try {
-        const url = await uploadImage(file, 'product');
-        setImages((prev) => (prev.length >= 35 ? prev : [...prev, url]));
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Не удалось загрузить';
-        alert(`Ошибка загрузки «${file.name}»: ${msg}`);
-      }
-    }
+  // Files chosen by the admin queue up here; the next one in line is
+  // surfaced to ImageCropModal. After confirming a crop, the file is
+  // uploaded and the queue advances. Multiple-select photos walk through
+  // the modal one by one so the admin can crop each individually.
+  const [cropQueue, setCropQueue] = useState<{ file: File; target: 'product' | { color: number } }[]>([]);
+
+  const queueFiles = (files: FileList | null, target: 'product' | { color: number }) => {
+    if (!files || files.length === 0) return;
+    setCropQueue((prev) => [...prev, ...Array.from(files).map((file) => ({ file, target }))]);
   };
 
-  const handleColorPhotoUpload = async (colorIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    queueFiles(e.target.files, 'product');
     e.target.value = '';
-    for (const file of Array.from(files)) {
-      try {
-        const url = await uploadImage(file, 'color');
+  };
+
+  const handleColorPhotoUpload = (colorIdx: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    queueFiles(e.target.files, { color: colorIdx });
+    e.target.value = '';
+  };
+
+  // Called by the crop modal when the admin confirms the trim.
+  const handleCropConfirm = async (cropped: File) => {
+    const head = cropQueue[0];
+    if (!head) return;
+    // Pop first so the next file's modal opens immediately even if upload
+    // is slow — uploads still run in the background.
+    setCropQueue((prev) => prev.slice(1));
+    try {
+      if (head.target === 'product') {
+        const url = await uploadImage(cropped, 'product');
+        setImages((prev) => (prev.length >= 35 ? prev : [...prev, url]));
+      } else {
+        const colorIdx = head.target.color;
+        const url = await uploadImage(cropped, 'color');
         setColors((prev) =>
           prev.map((c, i) =>
             i !== colorIdx ? c : c.photos.length >= 35 ? c : { ...c, photos: [...c.photos, url] },
           ),
         );
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Не удалось загрузить';
-        alert(`Ошибка загрузки «${file.name}»: ${msg}`);
       }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Не удалось загрузить';
+      alert(`Ошибка загрузки «${head.file.name}»: ${msg}`);
     }
+  };
+
+  const handleCropCancel = () => {
+    // Skip just the head — keep any other queued files intact.
+    setCropQueue((prev) => prev.slice(1));
   };
 
   const removeImage = (idx: number) => setImages((prev) => prev.filter((_, i) => i !== idx));
@@ -235,13 +251,21 @@ function ProductForm({
   };
 
   const handleEyedropper = async (idx: number) => {
+    // Native EyeDropper API is desktop-Chromium only. On every other browser
+    // (Safari mobile/desktop, Firefox, etc.) it doesn't exist — instead of
+    // doing nothing we tell the user to use the round swatch / hex input,
+    // both of which work everywhere.
+    if (!('EyeDropper' in window)) {
+      alert('Пипетка работает только в Chrome/Edge на компьютере. На телефоне используйте круглый кружок цвета или введите HEX-код вручную.');
+      return;
+    }
     try {
-      if ('EyeDropper' in window) {
-        const dropper = new (window as any).EyeDropper();
-        const result = await dropper.open();
-        updateColorHex(idx, result.sRGBHex);
-      }
-    } catch {}
+      const dropper = new (window as any).EyeDropper();
+      const result = await dropper.open();
+      updateColorHex(idx, (result.sRGBHex as string).toUpperCase());
+    } catch {
+      // User cancelled — silent.
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -281,6 +305,17 @@ function ProductForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Crop modal — opens whenever there's a file waiting to be cropped.
+          Drains the queue file-by-file. */}
+      {cropQueue[0] && (
+        <ImageCropModal
+          key={cropQueue[0].file.name + cropQueue.length}
+          file={cropQueue[0].file}
+          onConfirm={handleCropConfirm}
+          onCancel={handleCropCancel}
+        />
+      )}
+
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-lg font-bold">{initial ? 'Редактировать товар' : 'Новый товар'}</h3>
         <button type="button" onClick={onCancel} className="p-2 hover:bg-primary/5 rounded-full transition-colors">
@@ -337,11 +372,25 @@ function ProductForm({
             </div>
           ))}
           {images.length < 35 && (
-            <label className="w-16 h-16 rounded-xl border-2 border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
-              <Upload size={14} className="opacity-30" />
-              <span className="text-[8px] opacity-30 mt-0.5">{images.length}/35</span>
-              <input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" />
-            </label>
+            <>
+              {/* Gallery picker — multi-select, no `capture` so the OS shows
+                  the photo library (and a 'take photo' option in the same sheet
+                  on iOS). */}
+              <label className="w-16 h-16 rounded-xl border-2 border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
+                <Upload size={14} className="opacity-30" />
+                <span className="text-[8px] opacity-30 mt-0.5">Галерея</span>
+                <span className="text-[7px] opacity-30">{images.length}/35</span>
+                <input type="file" accept="image/*" multiple onChange={handleFileUpload} className="hidden" />
+              </label>
+              {/* Direct-to-camera button — `capture="environment"` skips the
+                  chooser sheet and goes straight to the rear camera, which is
+                  what mobile clients usually want for a quick product shot. */}
+              <label className="w-16 h-16 rounded-xl border-2 border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
+                <Camera size={14} className="opacity-30" />
+                <span className="text-[8px] opacity-30 mt-0.5">Камера</span>
+                <input type="file" accept="image/*" capture="environment" onChange={handleFileUpload} className="hidden" />
+              </label>
+            </>
           )}
         </div>
       </div>
@@ -424,23 +473,47 @@ function ProductForm({
         <div className="space-y-3">
           {colors.map((c, i) => (
             <div key={i} className="bg-background rounded-2xl p-3 space-y-2">
-              <div className="flex items-center gap-2">
+              {/* Three ways to set a colour, in order of likely-to-work on
+                  the client's device:
+                    1. Tap the round swatch → native colour picker (works on
+                       all desktop, iOS 16.4+, modern Android).
+                    2. Eyedropper button → Chrome/Edge desktop only; falls
+                       back to opening the native picker when unsupported.
+                    3. Type the hex code manually — universal fallback.        */}
+              <div className="flex items-center gap-2 flex-wrap">
                 <input
                   type="color"
-                  value={c.hex}
-                  onChange={(e) => updateColorHex(i, e.target.value)}
+                  value={/^#[0-9A-Fa-f]{6}$/.test(c.hex) ? c.hex : '#000000'}
+                  onChange={(e) => updateColorHex(i, e.target.value.toUpperCase())}
                   className="w-8 h-8 rounded-full border-0 cursor-pointer bg-transparent [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-2 [&::-webkit-color-swatch]:border-primary/10"
+                  title="Открыть выбор цвета"
                 />
-                <button type="button" onClick={() => handleEyedropper(i)} className="p-1.5 rounded-full hover:bg-primary/10 transition-colors" title="Пипетка">
+                <button type="button" onClick={() => handleEyedropper(i)} className="p-1.5 rounded-full hover:bg-primary/10 transition-colors" title="Пипетка (только Chrome/Edge)">
                   <Pipette size={14} className="opacity-50" />
                 </button>
-                <span className="text-[10px] opacity-40 font-mono w-16">{c.hex}</span>
+                <input
+                  type="text"
+                  value={c.hex}
+                  onChange={(e) => {
+                    let v = e.target.value.trim().toUpperCase();
+                    if (v && !v.startsWith('#')) v = '#' + v;
+                    // Allow any partial hex while typing; full validation on
+                    // submit is fine since invalid colours just render black.
+                    if (/^#?[0-9A-Fa-f]{0,6}$/.test(v.replace('#', ''))) {
+                      updateColorHex(i, v);
+                    }
+                  }}
+                  placeholder="#000000"
+                  maxLength={7}
+                  spellCheck={false}
+                  className="text-[11px] font-mono w-20 bg-surface rounded-md px-2 py-1.5 border border-primary/10 outline-none focus:ring-1 focus:ring-primary uppercase"
+                />
                 <input
                   type="text"
                   value={c.name}
                   onChange={(e) => updateColorName(i, e.target.value)}
                   placeholder="Название цвета (напр. Дуб натуральный)"
-                  className="flex-1 bg-surface rounded-xl px-3 py-1.5 border border-primary/5 text-xs outline-none focus:ring-1 focus:ring-primary"
+                  className="flex-1 min-w-[120px] bg-surface rounded-xl px-3 py-1.5 border border-primary/5 text-xs outline-none focus:ring-1 focus:ring-primary"
                 />
                 {colors.length > 1 && (
                   <button type="button" onClick={() => removeColor(i)} className="p-1 rounded-full hover:bg-red-50 transition-colors">
@@ -459,11 +532,18 @@ function ProductForm({
                   </div>
                 ))}
                 {c.photos.length < 35 && (
-                  <label className="w-12 h-12 rounded-lg border border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
-                    <Upload size={10} className="opacity-30" />
-                    <span className="text-[7px] opacity-30">{c.photos.length}/35</span>
-                    <input type="file" accept="image/*" multiple onChange={(e) => handleColorPhotoUpload(i, e)} className="hidden" />
-                  </label>
+                  <>
+                    <label className="w-12 h-12 rounded-lg border border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
+                      <Upload size={10} className="opacity-30" />
+                      <span className="text-[7px] opacity-30">{c.photos.length}/35</span>
+                      <input type="file" accept="image/*" multiple onChange={(e) => handleColorPhotoUpload(i, e)} className="hidden" />
+                    </label>
+                    <label className="w-12 h-12 rounded-lg border border-dashed border-primary/15 flex flex-col items-center justify-center cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-all">
+                      <Camera size={10} className="opacity-30" />
+                      <span className="text-[7px] opacity-30">камера</span>
+                      <input type="file" accept="image/*" capture="environment" onChange={(e) => handleColorPhotoUpload(i, e)} className="hidden" />
+                    </label>
+                  </>
                 )}
               </div>
             </div>
