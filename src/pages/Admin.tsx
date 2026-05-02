@@ -5,7 +5,8 @@ import {
   Package, CheckCircle, Bell, MessageCircle, Send, ArrowLeft, Plus, Trash2,
   Edit3, X, Save, Check, Settings, Upload, Camera,
   Pipette, BarChart3, Users, ShoppingCart, Heart, Eye, Calendar,
-  Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound
+  Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound,
+  Crown
 } from 'lucide-react';
 import { useStore, Order, RecommendationCategory, ALL_SECTIONS, SectionName } from '../store/useStore';
 import { Product } from '../data/products';
@@ -234,10 +235,35 @@ function ProductForm({
 
   const removeImage = (idx: number) => setImages((prev) => prev.filter((_, i) => i !== idx));
 
+  // Promote a general photo to "main" by moving it to index 0. The save
+  // handler treats `images[0]` as the product cover, so this is enough
+  // — no extra schema field needed.
+  const setMainImage = (idx: number) => {
+    if (idx === 0) return;
+    setImages((prev) => {
+      const next = prev.slice();
+      const [picked] = next.splice(idx, 1);
+      next.unshift(picked);
+      return next;
+    });
+  };
+
   const removeColorPhoto = (colorIdx: number, photoIdx: number) => {
     setColors(prev => prev.map((c, i) => {
       if (i !== colorIdx) return c;
       return { ...c, photos: c.photos.filter((_, pi) => pi !== photoIdx) };
+    }));
+  };
+
+  // Same trick for per-colour galleries: photos[0] is the swatch image.
+  const setMainColorPhoto = (colorIdx: number, photoIdx: number) => {
+    if (photoIdx === 0) return;
+    setColors((prev) => prev.map((c, i) => {
+      if (i !== colorIdx) return c;
+      const next = c.photos.slice();
+      const [picked] = next.splice(photoIdx, 1);
+      next.unshift(picked);
+      return { ...c, photos: next };
     }));
   };
 
@@ -366,6 +392,17 @@ function ProductForm({
             <div key={i} className="relative w-16 h-16 rounded-xl overflow-hidden border border-primary/10 shadow-sm group">
               <img src={img} alt="" className="w-full h-full object-cover" />
               {i === 0 && <span className="absolute top-0.5 left-0.5 bg-primary text-primary-inv text-[7px] px-1 py-0.5 rounded-full">Главное</span>}
+              {i !== 0 && (
+                <button
+                  type="button"
+                  onClick={() => setMainImage(i)}
+                  title="Сделать главным"
+                  aria-label="Сделать главным"
+                  className="absolute bottom-0.5 left-0.5 bg-black/50 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Crown size={8} />
+                </button>
+              )}
               <button type="button" onClick={() => removeImage(i)} className="absolute top-0.5 right-0.5 bg-black/50 text-white rounded-full w-4 h-4 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                 <X size={8} />
               </button>
@@ -526,6 +563,20 @@ function ProductForm({
                 {c.photos.map((photo, pi) => (
                   <div key={pi} className="relative w-12 h-12 rounded-lg overflow-hidden border border-primary/10 group">
                     <img src={photo} alt="" className="w-full h-full object-cover" />
+                    {pi === 0 && (
+                      <span className="absolute top-0 left-0 bg-primary text-primary-inv text-[6px] px-1 rounded-br-md leading-tight">★</span>
+                    )}
+                    {pi !== 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMainColorPhoto(i, pi)}
+                        title="Сделать главным для этого цвета"
+                        aria-label="Сделать главным"
+                        className="absolute bottom-0 left-0 bg-black/50 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Crown size={7} />
+                      </button>
+                    )}
                     <button type="button" onClick={() => removeColorPhoto(i, pi)} className="absolute top-0 right-0 bg-black/50 text-white rounded-full w-3.5 h-3.5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                       <X size={7} />
                     </button>

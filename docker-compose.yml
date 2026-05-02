@@ -28,6 +28,12 @@ services:
       # Override DATABASE_URL inside the compose network — db is the
       # service name, not localhost.
       DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-mebel}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-mebel}
+    volumes:
+      # Persist locally-stored uploads across container rebuilds. Without
+      # this, every `docker compose up --build` wipes admin-uploaded photos.
+      # Stays empty when S3 is configured (storage.upload_image takes the S3
+      # branch and never touches /app/uploads).
+      - mebel_uploads:/app/uploads
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
       interval: 10s
@@ -53,3 +59,4 @@ services:
 
 volumes:
   mebel_pgdata:
+  mebel_uploads:
