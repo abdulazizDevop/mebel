@@ -60,12 +60,20 @@ def _key(prefix: str, ext: str) -> str:
 
 def _s3_client():
     settings = get_settings()
+    # When a custom endpoint is set we're talking to a non-AWS S3 (TimeWeb,
+    # MinIO, Wasabi, Backblaze...) — most of those only support path-style
+    # addressing. `auto` would pick virtual-hosted (`<bucket>.host`) for
+    # AWS-compatible bucket names and silently 403 against TimeWeb. Forcing
+    # `path` here is the safe default.
+    addressing_style = "path" if settings.s3_endpoint_url else "auto"
     kwargs = {
         "aws_access_key_id": settings.aws_access_key_id,
         "aws_secret_access_key": settings.aws_secret_access_key,
         "region_name": settings.aws_region,
-        # Path-style addressing is friendlier for non-AWS S3 (e.g. MinIO).
-        "config": BotoConfig(signature_version="s3v4", s3={"addressing_style": "auto"}),
+        "config": BotoConfig(
+            signature_version="s3v4",
+            s3={"addressing_style": addressing_style},
+        ),
     }
     if settings.s3_endpoint_url:
         kwargs["endpoint_url"] = settings.s3_endpoint_url
@@ -98,12 +106,20 @@ def _validate_image(file: UploadFile, total_bytes: int) -> None:
 
 def _put_s3(stream: BinaryIO, key: str, content_type: str) -> None:
     settings = get_settings()
+    extra_args: dict[str, str] = {
+        "ContentType": content_type,
+        "CacheControl": "public, max-age=31536000",
+    }
+    # AWS honors `ACL: public-read` on each object. TimeWeb / some MinIO setups
+    # reject it and require a bucket policy instead — disable via S3_USE_ACL=false.
+    if settings.s3_use_acl:
+        extra_args["ACL"] = "public-read"
     try:
         _s3_client().upload_fileobj(
             stream,
             settings.s3_bucket,
             key,
-            ExtraArgs={"ContentType": content_type, "ACL": "public-read", "CacheControl": "public, max-age=31536000"},
+            ExtraArgs=extra_args,
         )
     except (BotoCoreError, ClientError) as exc:
         log.exception("S3 upload failed for %s", key)

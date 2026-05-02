@@ -33,6 +33,11 @@ class Settings(BaseSettings):
     s3_bucket: str = ""
     s3_endpoint_url: str = ""        # e.g. https://s3.twcstorage.ru — empty for AWS S3
     s3_public_url_prefix: str = ""   # e.g. https://s3.twcstorage.ru/mebel — empty = canonical S3 host
+    # Some S3-compatibles (TimeWeb, certain MinIO setups) reject per-object
+    # `ACL: public-read` and require a bucket-wide policy instead. When the
+    # bucket is already configured for public read access, set this to false
+    # so PUT requests don't fail on the ACL header.
+    s3_use_acl: bool = True
     upload_max_bytes: int = 10 * 1024 * 1024  # 10 MB hard cap
 
     @property

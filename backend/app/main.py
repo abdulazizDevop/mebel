@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -64,3 +65,22 @@ app.include_router(ws_chat_router.router)
 _uploads_dir = Path(__file__).resolve().parent.parent / "uploads"
 _uploads_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static/uploads", StaticFiles(directory=str(_uploads_dir)), name="uploads")
+
+# Surface which storage backend is active at startup so the operator can
+# tell at a glance whether uploads are going to S3 or the local volume.
+# Crucial when triaging "photos disappeared" — local disk is fine for dev
+# but means a docker rebuild wipes them unless a volume is mounted.
+_log = logging.getLogger("app.startup")
+if settings.s3_enabled:
+    _log.info(
+        "Uploads → S3: bucket=%s endpoint=%s acl=%s",
+        settings.s3_bucket,
+        settings.s3_endpoint_url or "<aws default>",
+        "on" if settings.s3_use_acl else "off (bucket policy)",
+    )
+else:
+    _log.warning(
+        "Uploads → LOCAL DISK at %s — only safe for dev. Configure S3_* "
+        "env vars to push to remote storage.",
+        _uploads_dir,
+    )
