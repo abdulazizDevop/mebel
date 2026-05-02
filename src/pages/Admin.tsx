@@ -356,7 +356,7 @@ function ProductForm({
         </div>
         <div>
           <label className="text-xs font-bold opacity-50 mb-1 block">Цена продажи (₽) *</label>
-          <input type="number" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="12900" className={fieldClass} required />
+          <input type="number" min="0" max="10000000000" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="12900" className={fieldClass} required />
         </div>
       </div>
 
@@ -365,6 +365,7 @@ function ProductForm({
         <input
           type="number"
           min="0"
+          max="10000000000"
           value={purchasePrice}
           onChange={(e) => setPurchasePrice(e.target.value)}
           placeholder="6500"
@@ -490,6 +491,7 @@ function ProductForm({
             <input
               type="number"
               min="0"
+              max="1000000000"
               value={quantity}
               onChange={(e) => setQuantity(e.target.value)}
               placeholder="Без ограничений"
