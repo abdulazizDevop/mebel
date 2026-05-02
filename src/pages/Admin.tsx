@@ -329,11 +329,21 @@ function ProductForm({
       weight: weight.trim() || undefined,
       material: material.trim() || undefined,
       colorVariants: colors.map((c, i) => {
+        if (i === 0) {
+          // Merge the general gallery and the primary variant's per-colour
+          // photos so neither set is dropped on save. When editing an
+          // existing product, colors[0].photos is pre-populated from the
+          // last save — without this merge, anything the admin newly drops
+          // into "Общие фото" gets silently discarded.
+          // De-dupe via Set, preserving order: general first, then any
+          // per-colour extras that aren't already there.
+          const merged = Array.from(new Set([...images, ...c.photos]));
+          if (merged.length > 0) {
+            return { hex: c.hex, name: c.name, image: merged[0], photos: merged };
+          }
+        }
         if (c.photos.length > 0) {
           return { hex: c.hex, name: c.name, image: c.photos[0], photos: c.photos };
-        }
-        if (i === 0 && images.length > 0) {
-          return { hex: c.hex, name: c.name, image: images[0], photos: images };
         }
         const fallback = images[i] || mainImage;
         return { hex: c.hex, name: c.name, image: fallback, photos: [fallback] };
