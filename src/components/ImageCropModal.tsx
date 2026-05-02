@@ -10,10 +10,11 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import ReactCrop, { centerCrop, makeAspectCrop, type Crop, type PixelCrop } from 'react-image-crop';
-import { X, Check } from 'lucide-react';
+import { X, Check, Palette, Pipette } from 'lucide-react';
 import 'react-image-crop/dist/ReactCrop.css';
 
 import { cn } from '../utils/cn';
+import { preloadBackgroundRemoval, replaceBackground } from '../utils/backgroundRemoval';
 
 interface Props {
   /** The original `File` the admin picked from gallery/camera. */
@@ -32,6 +33,10 @@ const ASPECT_OPTIONS: { label: string; value: number | undefined }[] = [
   { label: '16:9', value: 16 / 9 },
 ];
 
+// Quick-pick palette for background swatches. The native colour input is
+// always available below for anything custom.
+const BG_PRESETS = ['#FFFFFF', '#F5F5F0', '#E8E2D4', '#1A1A1A', '#222831', '#D9CFC1', '#C1A78D', '#7E8C7C'];
+
 function defaultCrop(width: number, height: number, aspect?: number): Crop {
   if (!aspect) {
     return { unit: '%', width: 90, height: 90, x: 5, y: 5 };
@@ -49,7 +54,33 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
   const [completedCrop, setCompletedCrop] = useState<PixelCrop | null>(null);
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
+  const [busyLabel, setBusyLabel] = useState('');
+  // Background-replacement state. Off by default — most product shots
+  // already have a clean backdrop, so we don't slow down every save with
+  // a 3-4 MB model download. When the admin toggles this on the lib
+  // chunk starts loading in the background so the apply step is fast.
+  const [bgEnabled, setBgEnabled] = useState(false);
+  const [bgColor, setBgColor] = useState('#FFFFFF');
+  const [bgProgress, setBgProgress] = useState<number | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    if (bgEnabled) preloadBackgroundRemoval();
+  }, [bgEnabled]);
+
+  const handleEyedropper = async () => {
+    if (!('EyeDropper' in window)) {
+      alert('Пипетка работает только в Chrome/Edge на компьютере.');
+      return;
+    }
+    try {
+      const dropper = new (window as unknown as { EyeDropper: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper();
+      const result = await dropper.open();
+      setBgColor(result.sRGBHex.toUpperCase());
+    } catch {
+      // user cancelled — silent
+    }
+  };
 
   // Read the file into a data URL so <img> can render it. Revoking the
   // ObjectURL would invalidate the rendered image, so we keep it for the
@@ -94,6 +125,7 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
     if (!img || !completedCrop || completedCrop.width < 1 || completedCrop.height < 1) return;
 
     setBusy(true);
+    setBusyLabel('Обработка…');
     try {
       // Crop on a canvas at native resolution — `naturalWidth/Height` are
       // the file's actual pixels, while `width/height` are the rendered
@@ -123,12 +155,37 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
 
       // Replace original extension with .jpg — we always re-encode to JPEG.
       const baseName = file.name.replace(/\.[^.]+$/, '') || 'photo';
-      const cropped = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
-      onConfirm(cropped);
+      let result = new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' });
+
+      if (bgEnabled) {
+        // Lazy-load the model + replace the backdrop. First run downloads
+        // a few MB from IMG.LY's CDN; subsequent crops in the same session
+        // reuse it. If anything fails (offline, unsupported browser) the
+        // crop without bg-replace still goes through.
+        setBusyLabel('Удаляю фон…');
+        setBgProgress(0);
+        try {
+          result = await replaceBackground(result, {
+            bgColor,
+            onProgress: (p) => setBgProgress(p),
+          });
+        } catch (e) {
+          alert(
+            'Не удалось заменить фон: ' +
+              (e instanceof Error ? e.message : 'unknown') +
+              '. Загружаю исходное изображение.',
+          );
+        } finally {
+          setBgProgress(null);
+        }
+      }
+
+      onConfirm(result);
     } catch (err) {
       alert('Не удалось обрезать изображение: ' + (err instanceof Error ? err.message : 'unknown'));
     } finally {
       setBusy(false);
+      setBusyLabel('');
     }
   };
 
@@ -161,6 +218,99 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
               {opt.label}
             </button>
           ))}
+        </div>
+
+        {/* Background-replace block — toggle reveals colour picker.
+            We don't auto-run the model on toggle; it fires on Save so the
+            admin can crop+recolour in one step. */}
+        <div className="mb-3">
+          <button
+            type="button"
+            onClick={() => setBgEnabled(v => !v)}
+            className={cn(
+              'w-full flex items-center justify-between gap-2 rounded-2xl px-4 py-2.5 border text-xs sm:text-sm font-bold transition-all',
+              bgEnabled
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : 'bg-background border-primary/10 hover:bg-primary/5',
+            )}
+          >
+            <span className="flex items-center gap-2">
+              <Palette size={14} />
+              Изменить фон
+            </span>
+            <span
+              className={cn(
+                'relative w-9 h-5 rounded-full transition-all',
+                bgEnabled ? 'bg-primary' : 'bg-primary/15',
+              )}
+            >
+              <span
+                className={cn(
+                  'absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-all',
+                  bgEnabled ? 'left-[18px]' : 'left-0.5',
+                )}
+              />
+            </span>
+          </button>
+
+          {bgEnabled && (
+            <div className="mt-2 bg-background rounded-2xl p-3 space-y-2.5 border border-primary/5">
+              <p className="text-[10px] opacity-50 leading-relaxed">
+                ИИ удалит фон и заменит его на выбранный цвет. Первый раз скачивается модель (~30 МБ), дальше работает быстро (кеш браузера).
+              </p>
+              <div className="flex gap-1.5 flex-wrap">
+                {BG_PRESETS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => setBgColor(c)}
+                    className={cn(
+                      'w-7 h-7 rounded-full border-2 transition-all hover:scale-110',
+                      bgColor.toUpperCase() === c.toUpperCase()
+                        ? 'border-primary shadow-md ring-2 ring-primary/20 ring-offset-1'
+                        : 'border-primary/10',
+                    )}
+                    style={{ backgroundColor: c }}
+                    title={c}
+                  />
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={/^#[0-9A-Fa-f]{6}$/.test(bgColor) ? bgColor : '#FFFFFF'}
+                  onChange={(e) => setBgColor(e.target.value.toUpperCase())}
+                  className="w-8 h-8 rounded-full border-0 cursor-pointer bg-transparent [&::-webkit-color-swatch]:rounded-full [&::-webkit-color-swatch-wrapper]:p-0 [&::-webkit-color-swatch]:border-2 [&::-webkit-color-swatch]:border-primary/10"
+                  title="Произвольный цвет"
+                />
+                <button
+                  type="button"
+                  onClick={handleEyedropper}
+                  className="p-1.5 rounded-full hover:bg-primary/10 transition-colors"
+                  title="Пипетка (Chrome/Edge)"
+                >
+                  <Pipette size={14} className="opacity-50" />
+                </button>
+                <input
+                  type="text"
+                  value={bgColor}
+                  onChange={(e) => {
+                    let v = e.target.value.trim().toUpperCase();
+                    if (v && !v.startsWith('#')) v = '#' + v;
+                    if (/^#?[0-9A-Fa-f]{0,6}$/.test(v.replace('#', ''))) setBgColor(v);
+                  }}
+                  maxLength={7}
+                  spellCheck={false}
+                  className="text-[11px] font-mono w-20 bg-surface rounded-md px-2 py-1.5 border border-primary/10 outline-none focus:ring-1 focus:ring-primary uppercase"
+                />
+                {bgProgress !== null && (
+                  <span className="text-[10px] opacity-60 ml-auto">
+                    Загрузка модели: {bgProgress}%
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Crop area — capped to 70vh so on tall portrait images the user
@@ -208,7 +358,7 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
                 : 'bg-primary text-primary-inv hover:scale-[1.02] active:scale-[0.98]',
             )}
           >
-            <Check size={16} /> {busy ? 'Обработка…' : 'Сохранить'}
+            <Check size={16} /> {busy ? (busyLabel || 'Обработка…') : 'Сохранить'}
           </button>
         </div>
         {/* Bypass — useful when Safari has trouble loading the image into
