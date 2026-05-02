@@ -189,7 +189,13 @@ function ProductForm({
 
   const queueFiles = (files: FileList | null, target: 'product' | { color: number }) => {
     if (!files || files.length === 0) return;
-    setCropQueue((prev) => [...prev, ...Array.from(files).map((file) => ({ file, target }))]);
+    // Snapshot the FileList NOW. The caller clears `e.target.value = ''`
+    // immediately after this returns, which empties the FileList in some
+    // browsers — and React's setState updater runs later, so without this
+    // snapshot the closure sees an empty list and silently no-ops. Symptom
+    // was "the second upload never queues until a hard refresh".
+    const snapshot = Array.from(files).map((file) => ({ file, target }));
+    setCropQueue((prev) => [...prev, ...snapshot]);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -303,6 +309,13 @@ function ProductForm({
       : undefined;
 
     const mainImage = images[0] || colors[0]?.photos[0] || '';
+    // The backend schema only stores per-colour `photos[]` arrays — there
+    // is no separate "general gallery". So when the admin drops several
+    // shots into "Общие фото товара" without filling per-colour
+    // galleries, we route the whole list into the FIRST variant's photos
+    // so all of them are persisted (and surface on the product detail
+    // page). Variants beyond the first only inherit a single fallback
+    // image to keep their swatch sensible.
     const product: Product = {
       id: initial?.id || `P-${Date.now().toString(36).toUpperCase()}`,
       name: name.trim(),
@@ -315,12 +328,16 @@ function ProductForm({
       dimensions: dims,
       weight: weight.trim() || undefined,
       material: material.trim() || undefined,
-      colorVariants: colors.map((c, i) => ({
-        hex: c.hex,
-        name: c.name,
-        image: c.photos[0] || images[i] || mainImage,
-        photos: c.photos.length > 0 ? c.photos : (images[i] ? [images[i]] : [mainImage]),
-      })),
+      colorVariants: colors.map((c, i) => {
+        if (c.photos.length > 0) {
+          return { hex: c.hex, name: c.name, image: c.photos[0], photos: c.photos };
+        }
+        if (i === 0 && images.length > 0) {
+          return { hex: c.hex, name: c.name, image: images[0], photos: images };
+        }
+        const fallback = images[i] || mainImage;
+        return { hex: c.hex, name: c.name, image: fallback, photos: [fallback] };
+      }),
       inStock,
       quantity: quantity ? Number(quantity) : undefined,
     };
