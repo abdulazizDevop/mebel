@@ -109,6 +109,14 @@ export const sendChatAsAdmin = (orderId: string, text: string) =>
 export const sendChatAsCustomer = (orderId: string, text: string) =>
   api.post<ChatMessageDTO>(`/orders/${orderId}/chat/customer`, { text }, { tokenSlot: 'customer' });
 
+/* ─── Guest chat (order-link capability, no auth) ─── */
+/** Poll a guest order's chat by UUID — how a not-logged-in customer sees admin replies. */
+export const getOrderChatPublic = (orderId: string) =>
+  api.get<ChatMessageDTO[]>(`/orders/${orderId}/chat`);
+/** Guest customer reply, keyed by order UUID (no token). */
+export const sendChatAsGuest = (orderId: string, text: string) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/guest`, { text });
+
 /* ─── Image upload ─── */
 export async function uploadImage(file: File, kind: 'product' | 'color' = 'product'): Promise<string> {
   const path = kind === 'color' ? '/uploads/color-photo' : '/uploads/image';

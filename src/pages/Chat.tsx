@@ -4,7 +4,7 @@ import { Send, ArrowLeft, Package, MessageCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../utils/cn';
-import { dtoToChatMessage, socketMessageToDto, useOrderChatSocket } from '../api';
+import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, useOrderChatSocket } from '../api';
 
 export function Chat() {
   const { orders, activeOrderId, setActiveOrderId, sendMessage, adminSession, appendChatMessage } = useStore();
@@ -24,6 +24,29 @@ export function Chat() {
     [activeOrderId, appendChatMessage],
   );
   const chatSocket = useOrderChatSocket(activeOrderId, 'customer', handleSocketMessage);
+
+  // Guests have no customer JWT, so the WebSocket above never connects. Poll
+  // the public order-chat endpoint (keyed by the order UUID) so admin replies
+  // still land in the UI. Logged-in customers keep the live socket instead.
+  useEffect(() => {
+    if (!activeOrderId || tokenStore.get('customer')) return;
+    let cancelled = false;
+    const pull = async () => {
+      try {
+        const dtos = await getOrderChatPublic(activeOrderId);
+        if (cancelled) return;
+        for (const dto of dtos) appendChatMessage(activeOrderId, dtoToChatMessage(dto));
+      } catch {
+        /* order not found / offline — keep whatever is cached */
+      }
+    };
+    pull();
+    const timer = setInterval(pull, 4000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeOrderId, appendChatMessage]);
 
   // Admins should never land on the customer-facing chat — their conversations
   // live in /admin → Заказы. Bounce them.

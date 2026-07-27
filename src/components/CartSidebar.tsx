@@ -80,7 +80,7 @@ export function CartSidebar() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full w-full max-w-sm z-[70] shadow-2xl flex flex-col" style={{ backgroundColor: 'var(--color-bg)' }}
+            className="fixed top-0 right-0 h-full h-[100dvh] w-full max-w-sm z-[70] shadow-2xl flex flex-col" style={{ backgroundColor: 'var(--color-bg)' }}
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-primary/5">
@@ -268,7 +268,7 @@ export function CartSidebar() {
 
             {/* Footer */}
             {step === 'cart' && cart.length > 0 && (
-              <div className="p-6 border-t border-primary/5">
+              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-primary/5">
                 <div className="flex justify-between mb-4">
                   <span className="opacity-50">Итого</span>
                   <span className="text-xl font-bold">{total} ₽</span>
@@ -283,7 +283,7 @@ export function CartSidebar() {
             )}
 
             {step === 'form' && (
-              <div className="p-6 border-t border-primary/5">
+              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-primary/5">
                 {submitError && (
                   <p className="text-xs text-red-500 mb-2 px-1">{submitError}</p>
                 )}

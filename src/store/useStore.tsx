@@ -27,6 +27,7 @@ import {
   registerCustomer as apiRegisterCustomer,
   sendChatAsAdmin as apiSendChatAsAdmin,
   sendChatAsCustomer as apiSendChatAsCustomer,
+  sendChatAsGuest as apiSendChatAsGuest,
   subscribeToPush,
   tokenStore,
   unsubscribeFromPush,
@@ -517,7 +518,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const sendMessage = async (orderId: string, from: 'client' | 'admin', text: string): Promise<void> => {
     try {
-      const sender = from === 'admin' ? apiSendChatAsAdmin : apiSendChatAsCustomer;
+      // Admins use the authed admin endpoint. Customers who are logged in use
+      // the authed customer endpoint; guests (the default checkout flow) fall
+      // back to the order-link guest endpoint keyed by the order UUID.
+      const sender =
+        from === 'admin'
+          ? apiSendChatAsAdmin
+          : tokenStore.get('customer')
+            ? apiSendChatAsCustomer
+            : apiSendChatAsGuest;
       const msgDto = await sender(orderId, text);
       const created = new Date(msgDto.created_at);
       const msg: ChatMessage = {
