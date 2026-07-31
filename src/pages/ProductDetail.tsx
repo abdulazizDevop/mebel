@@ -5,13 +5,14 @@ import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check, X, Pipe
 import { cn } from '../utils/cn';
 import { useStore } from '../store/useStore';
 import { LiquidButton } from '../components/LiquidButton';
+import { WhatsAppButton } from '../components/WhatsAppButton';
 import { dtoToProduct, getProduct as apiGetProduct } from '../api';
 import type { Product } from '../data/products';
 
 export function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { allProducts: products, addToCart, toggleFavorite, isFavorite: isFav, trackEvent } = useStore();
+  const { allProducts: products, addToCart, toggleFavorite, isFavorite: isFav, trackEvent, whatsappPhone } = useStore();
   const [showOrderToast, setShowOrderToast] = useState(false);
   const [activeColor, setActiveColor] = useState(0);
   const [activeThumb, setActiveThumb] = useState(0);
@@ -294,8 +295,17 @@ export function ProductDetail() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="fixed bottom-28 left-4 right-4 sm:left-auto sm:right-6 z-40 flex justify-center sm:justify-end"
+        className="fixed bottom-28 left-4 right-4 sm:left-auto sm:right-6 z-40 flex justify-center sm:justify-end items-center gap-3"
       >
+        {whatsappPhone && (
+          <WhatsAppButton
+            phone={whatsappPhone}
+            variant="icon"
+            label="Заказать в WhatsApp"
+            message={`Здравствуйте! Хотел бы заказать этот товар: ${product.name}\n${window.location.href}`}
+            className="w-[52px] h-[52px] shadow-lg"
+          />
+        )}
         <LiquidButton onClick={handleOrder} width={200} height={52}>
           <span className="flex items-center gap-2">
             <ShoppingBag size={16} />

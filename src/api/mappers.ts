@@ -77,6 +77,8 @@ export function dtoToChatMessage(m: ChatMessageDTO): ChatMessage {
     id: m.id,
     from: m.sender,
     text: m.text,
+    audioUrl: m.audio_url ?? undefined,
+    audioDuration: m.audio_duration ?? undefined,
     time: new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
     timestamp: ts,
   };

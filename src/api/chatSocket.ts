@@ -15,19 +15,24 @@ export interface ChatSocketMessage {
   sender: ChatSender;
   sender_user_id: string | null;
   text: string;
+  audio_url: string | null;
+  audio_duration: number | null;
   created_at: string;
 }
 
-function wsUrl(orderId: string, token: string): string {
+function wsUrl(orderId: string, token: string | null): string {
   // Convert http(s):// → ws(s):// for the matching origin.
   const base = API_BASE_URL.replace(/^http/, 'ws');
-  return `${base}/ws/orders/${encodeURIComponent(orderId)}/chat?token=${encodeURIComponent(token)}`;
+  const path = `${base}/ws/orders/${encodeURIComponent(orderId)}/chat`;
+  // Guests connect without a token — the backend gates them to unclaimed
+  // orders by the UUID in the path (bearer capability).
+  return token ? `${path}?token=${encodeURIComponent(token)}` : path;
 }
 
-export type ChatSlot = 'admin' | 'customer';
+export type ChatSlot = 'admin' | 'customer' | 'guest';
 
 export interface OrderChatSocket {
-  send: (text: string) => boolean;
+  send: (text: string, audioUrl?: string, audioDuration?: number) => boolean;
   /** True after the socket has reached OPEN. Useful for an "online" badge. */
   isOpen: boolean;
 }
@@ -58,8 +63,10 @@ export function useOrderChatSocket(
 
   useEffect(() => {
     if (!orderId) return;
-    const token = tokenStore.get(slot);
-    if (!token) return; // anonymous user — no live chat
+    // Guests connect tokenless (capability = order UUID). Authed slots need
+    // their JWT; without it there's nothing to connect with.
+    const token = slot === 'guest' ? null : tokenStore.get(slot);
+    if (slot !== 'guest' && !token) return;
 
     let cancelled = false;
     let attempt = 0;
@@ -113,11 +120,18 @@ export function useOrderChatSocket(
 
   return {
     isOpen,
-    send: (text: string) => {
+    send: (text: string, audioUrl?: string, audioDuration?: number) => {
       const trimmed = text.trim();
       const ws = wsRef.current;
-      if (!ws || ws.readyState !== WebSocket.OPEN || !trimmed) return false;
-      ws.send(JSON.stringify({ text: trimmed }));
+      // Allow a caption-less voice message: send when there's text OR audio.
+      if (!ws || ws.readyState !== WebSocket.OPEN || (!trimmed && !audioUrl)) return false;
+      ws.send(
+        JSON.stringify({
+          text: trimmed,
+          audio_url: audioUrl ?? null,
+          audio_duration: audioDuration ?? null,
+        }),
+      );
       return true;
     },
   };
@@ -132,6 +146,8 @@ export function socketMessageToDto(msg: ChatSocketMessage): ChatMessageDTO {
     sender: msg.sender,
     sender_user_id: msg.sender_user_id,
     text: msg.text,
+    audio_url: msg.audio_url ?? null,
+    audio_duration: msg.audio_duration ?? null,
     created_at: msg.created_at,
   };
 }

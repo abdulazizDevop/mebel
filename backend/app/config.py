@@ -39,6 +39,19 @@ class Settings(BaseSettings):
     # so PUT requests don't fail on the ACL header.
     s3_use_acl: bool = True
     upload_max_bytes: int = 10 * 1024 * 1024  # 10 MB hard cap
+    # Voice notes are short; the raw browser recording (webm/opus or mp4/aac)
+    # is tiny. 10 MB stays safely under the nginx `client_max_body_size 12m`
+    # proxy cap (so a valid note is never rejected at the edge) and still allows
+    # a very long recording.
+    audio_upload_max_bytes: int = 10 * 1024 * 1024
+    # Hard ceiling on a single voice note's duration — bounds ffmpeg output so a
+    # tiny, highly-compressed input can't transcode into a huge MP3 (audio bomb).
+    audio_max_duration_sec: int = 600
+
+    # WhatsApp deep-link target for the "order via WhatsApp" button. Digits only
+    # in international form (no +, spaces or dashes), e.g. 79001234567. Empty
+    # hides the button.
+    whatsapp_phone: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

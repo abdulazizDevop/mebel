@@ -15,6 +15,7 @@ import {
   fetchCustomerMe,
   ingestAnalyticsEvent as apiIngestAnalyticsEvent,
   listCategories as apiListCategories,
+  fetchPublicConfig,
   listProducts as apiListProducts,
   loginAdmin as apiLoginAdmin,
   loginCustomer as apiLoginCustomer,
@@ -60,6 +61,9 @@ export interface ChatMessage {
   id: string;
   from: 'client' | 'admin';
   text: string;
+  /** Voice message: URL of the transcoded MP3, and its length in seconds. */
+  audioUrl?: string;
+  audioDuration?: number;
   time: string;
   timestamp: number;
 }
@@ -177,7 +181,7 @@ interface StoreContextType {
   ) => Promise<string | null>;
   activeOrderId: string | null;
   setActiveOrderId: (id: string | null) => void;
-  sendMessage: (orderId: string, from: 'client' | 'admin', text: string) => Promise<void>;
+  sendMessage: (orderId: string, from: 'client' | 'admin', text: string, audioUrl?: string, audioDuration?: number) => Promise<void>;
   /** Insert a chat message into a known order's `chat` list, deduped by id.
    *  Used by the live WebSocket subscriber to land server-broadcast messages. */
   appendChatMessage: (orderId: string, msg: ChatMessage) => void;
@@ -231,6 +235,9 @@ interface StoreContextType {
   addCategory: (name: string) => void;
   removeCategory: (name: string) => void;
   allCategories: string[];
+
+  /** WhatsApp number (digits only) for the "order via WhatsApp" button. Empty = hidden. */
+  whatsappPhone: string;
 
   // Admin session (global)
   adminSession: { name: string; role: 'admin' | 'manager' | 'viewer'; sections: string[] } | null;
@@ -351,6 +358,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => dbGet(DB_KEYS.registeredUsers, [])
   );
 
+  // WhatsApp number for the "order via WhatsApp" deep-link, served by the
+  // backend /config so the owner can change it without a frontend rebuild.
+  const [whatsappPhone, setWhatsappPhone] = useState('');
+
   // Persist to localStorage
   useEffect(() => { dbSet(DB_KEYS.orders, orders); }, [orders]);
   useEffect(() => { dbSet(DB_KEYS.products, allProducts); }, [allProducts]);
@@ -411,6 +422,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     apiListCategories()
       .then(setCategoriesData)
       .catch(() => {});
+    fetchPublicConfig()
+      .then((c) => setWhatsappPhone(c.whatsapp_phone || ''))
+      .catch(() => {});
     refreshOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -461,6 +475,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const clearCart = () => setCart([]);
 
   // Orders
+  // A guest has no account to key push on, so their device subscribes to the
+  // order UUID. Called right after checkout — a user gesture, so the browser
+  // permission prompt is allowed to surface. Skipped for logged-in users,
+  // whose subscription is account-keyed by the session effect below.
+  const maybeSubscribeGuest = (orderId: string): void => {
+    if (!tokenStore.get('customer') && !tokenStore.get('admin')) {
+      subscribeToPush(orderId).catch(() => {});
+    }
+  };
+
   const placeOrder = async (name: string, phone: string): Promise<string | null> => {
     try {
       const dto = await apiPlaceOrder({
@@ -479,6 +503,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setCartOpen(false);
       trackEvent({ type: 'cart_checkout', data: { total: order.total, itemCount: order.items.length } });
       addNotification(`Новый заказ от ${name} на ${order.total} ₽`, order.id);
+      maybeSubscribeGuest(order.id);
       return order.id;
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Network error';
@@ -508,6 +533,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
       setActiveOrderId(order.id);
       addNotification(`Индивидуальный заказ от ${name}`, order.id);
+      maybeSubscribeGuest(order.id);
       return order.id;
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Network error';
@@ -516,7 +542,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const sendMessage = async (orderId: string, from: 'client' | 'admin', text: string): Promise<void> => {
+  const sendMessage = async (
+    orderId: string,
+    from: 'client' | 'admin',
+    text: string,
+    audioUrl?: string,
+    audioDuration?: number,
+  ): Promise<void> => {
     try {
       // Admins use the authed admin endpoint. Customers who are logged in use
       // the authed customer endpoint; guests (the default checkout flow) fall
@@ -527,12 +559,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : tokenStore.get('customer')
             ? apiSendChatAsCustomer
             : apiSendChatAsGuest;
-      const msgDto = await sender(orderId, text);
+      const msgDto = await sender(orderId, text, audioUrl, audioDuration);
       const created = new Date(msgDto.created_at);
       const msg: ChatMessage = {
         id: msgDto.id,
         from: msgDto.sender,
         text: msgDto.text,
+        audioUrl: msgDto.audio_url ?? undefined,
+        audioDuration: msgDto.audio_duration ?? undefined,
         time: created.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         timestamp: created.getTime(),
       };
@@ -790,6 +824,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       notifications, addNotification, markNotificationRead, unreadCount,
       recommendations, addRecommendation, updateRecommendation, removeRecommendation,
       customCategories: apiCategoryNames, addCategory, removeCategory, allCategories: allCategoriesList,
+      whatsappPhone,
       adminSession, setAdminSession, logoutAdmin,
       userSession, setUserSession, logoutUser, registeredUsers, registerUser, loginUser,
     }}>

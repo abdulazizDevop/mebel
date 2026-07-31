@@ -1,7 +1,7 @@
 import enum
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -19,7 +19,21 @@ def _now() -> datetime:
 
 class PushToken(Base):
     __tablename__ = "push_tokens"
-    __table_args__ = (UniqueConstraint("token", name="uq_push_tokens_token"),)
+    # A single browser endpoint may subscribe against several handles (an admin
+    # user, a registered customer, or one row per guest order), so uniqueness is
+    # (token, order_id) for guest rows. Because NULLs are DISTINCT in a unique
+    # index, that composite alone would NOT dedupe admin/customer rows (order_id
+    # NULL) — so a partial unique index enforces one row per token there too.
+    __table_args__ = (
+        UniqueConstraint("token", "order_id", name="uq_push_tokens_token_order"),
+        Index(
+            "uq_push_tokens_token_null_order",
+            "token",
+            unique=True,
+            sqlite_where=text("order_id IS NULL"),
+            postgresql_where=text("order_id IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str | None] = mapped_column(
@@ -27,6 +41,12 @@ class PushToken(Base):
     )
     customer_id: Mapped[str | None] = mapped_column(
         ForeignKey("customers.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    # Guest push: a not-logged-in customer has no user/customer id, so their
+    # device subscribes keyed by the order UUID (the same bearer capability the
+    # guest chat endpoints use). NULL for admin/customer subscriptions.
+    order_id: Mapped[str | None] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), nullable=True, index=True
     )
     token: Mapped[str] = mapped_column(Text, nullable=False)
     platform: Mapped[PushPlatform] = mapped_column(

@@ -104,18 +104,53 @@ export const adminUpdateOrderStatus = (id: string, status: OrderStatus) =>
   api.patch<OrderDTO>(`/orders/${id}/status`, { status }, { tokenSlot: 'admin' });
 
 /* ─── Chat ─── */
-export const sendChatAsAdmin = (orderId: string, text: string) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat`, { text }, { tokenSlot: 'admin' });
-export const sendChatAsCustomer = (orderId: string, text: string) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/customer`, { text }, { tokenSlot: 'customer' });
+interface ChatBody {
+  text: string;
+  audio_url?: string;
+  audio_duration?: number;
+}
+const chatBody = (text: string, audioUrl?: string, audioDuration?: number): ChatBody => ({
+  text,
+  ...(audioUrl ? { audio_url: audioUrl, audio_duration: audioDuration } : {}),
+});
+
+export const sendChatAsAdmin = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat`, chatBody(text, audioUrl, audioDuration), { tokenSlot: 'admin' });
+export const sendChatAsCustomer = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/customer`, chatBody(text, audioUrl, audioDuration), { tokenSlot: 'customer' });
 
 /* ─── Guest chat (order-link capability, no auth) ─── */
 /** Poll a guest order's chat by UUID — how a not-logged-in customer sees admin replies. */
 export const getOrderChatPublic = (orderId: string) =>
   api.get<ChatMessageDTO[]>(`/orders/${orderId}/chat`);
 /** Guest customer reply, keyed by order UUID (no token). */
-export const sendChatAsGuest = (orderId: string, text: string) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/guest`, { text });
+export const sendChatAsGuest = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/guest`, chatBody(text, audioUrl, audioDuration));
+
+/* ─── Voice upload ─── */
+/** Uploads a recorded audio blob (any browser format); the server transcodes to
+ *  MP3 and returns its public URL. Admins/customers authenticate by token; a
+ *  guest passes their unclaimed order's UUID as the bearer capability. */
+export async function uploadAudio(file: File, orderId?: string): Promise<string> {
+  const fd = new FormData();
+  fd.append('file', file);
+  if (orderId) fd.append('order_id', orderId);
+  const token = tokenStore.get('admin') || tokenStore.get('customer');
+  const res = await fetch(`${(import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')}/uploads/audio`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: fd,
+  });
+  if (!res.ok) {
+    let detail: string | undefined;
+    try { detail = (await res.json()).detail; } catch { /* */ }
+    throw new Error(detail || `Upload failed (${res.status})`);
+  }
+  return ((await res.json()) as { url: string }).url;
+}
+
+/* ─── Public runtime config (WhatsApp number, etc.) ─── */
+export const fetchPublicConfig = () => api.get<{ whatsapp_phone: string }>('/config');
 
 /* ─── Image upload ─── */
 export async function uploadImage(file: File, kind: 'product' | 'color' = 'product'): Promise<string> {

@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.database import get_db
 from app.deps import get_optional_customer
-from app.models import Customer, PushToken, User
+from app.models import Customer, Order, PushToken, User
 from app.services.push import store_subscription
 from app.security import decode_access_token
 import jwt
@@ -36,6 +36,9 @@ class SubscriptionIn(BaseModel):
     endpoint: str = Field(min_length=8, max_length=2000)
     keys: SubscriptionKeysIn
     expirationTime: int | None = None  # browser-supplied, ignored on the server
+    # Guest checkout: a not-logged-in customer subscribes keyed by their order
+    # UUID (bearer capability) so admin replies can push to their device.
+    order_id: str | None = Field(default=None, max_length=32)
 
 
 class SubscriptionOut(BaseModel):
@@ -96,11 +99,20 @@ def subscribe(
     authorization: Annotated[str | None, Header()] = None,
 ):
     user, customer = _resolve_admin_or_customer(authorization, db)
+
+    # A guest (no JWT) may subscribe by presenting an unclaimed order's UUID —
+    # the same bearer capability the guest chat/upload endpoints already trust.
+    guest_order_id: str | None = None
     if user is None and customer is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Push subscriptions require an admin or customer JWT",
-        )
+        if payload.order_id:
+            order = db.get(Order, payload.order_id)
+            if order is not None and order.customer_id is None:
+                guest_order_id = order.id
+        if guest_order_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Push subscriptions require an admin/customer JWT or an unclaimed order id",
+            )
 
     sub_dict: dict[str, Any] = {
         "endpoint": payload.endpoint,
@@ -111,6 +123,7 @@ def subscribe(
         subscription=sub_dict,
         user_id=user.id if user else None,
         customer_id=customer.id if customer else None,
+        order_id=guest_order_id,
         user_agent=request.headers.get("user-agent"),
     )
     return SubscriptionOut(id=row.id, endpoint=payload.endpoint)

@@ -91,7 +91,13 @@ class ChatMessage(Base):
     sender_user_id: Mapped[str | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    # Text stays NOT NULL — a voice-only message stores "" here and carries the
+    # audio in the columns below. `type` is derived client-side from audio_url.
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # Voice message: public URL of the transcoded MP3 and its length in seconds.
+    # Both NULL for plain text messages.
+    audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
     order: Mapped[Order] = relationship(back_populates="chat")

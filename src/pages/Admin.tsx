@@ -22,10 +22,12 @@ import {
   listAdminUsers as apiListAdminUsers,
   socketMessageToDto,
   updateAdminUser as apiUpdateAdminUser,
+  uploadAudio,
   uploadImage,
   useOrderChatSocket,
 } from '../api';
 import type { AdminUser, StatsDTO } from '../api';
+import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
 
 /* ═══════════════════════════════════════════════════
    AdminChat — order-specific chat
@@ -33,6 +35,8 @@ import type { AdminUser, StatsDTO } from '../api';
 function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
   const { sendMessage, appendChatMessage } = useStore();
   const [text, setText] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -56,6 +60,20 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
     }
     sendMessage(order.id, 'admin', trimmed);
     setText('');
+  };
+
+  const handleVoice = async (file: File, durationSec: number) => {
+    setUploadingVoice(true);
+    try {
+      const url = await uploadAudio(file, order.id);
+      if (!chatSocket.send('', url, durationSec)) {
+        await sendMessage(order.id, 'admin', '', url, durationSec);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось отправить голосовое сообщение');
+    } finally {
+      setUploadingVoice(false);
+    }
   };
 
   return (
@@ -91,7 +109,8 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
               )}>
                 {isAdmin ? 'Вы (админ)' : order.name}
               </p>
-              <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+              {msg.audioUrl && <AudioMessage src={msg.audioUrl} dark={isAdmin} />}
+              {msg.text && <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>}
               <p className={cn(
                 "text-[10px] mt-1",
                 isAdmin ? "text-primary-inv/50 text-right" : "text-primary/30"
@@ -104,26 +123,31 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
         <div ref={messagesEndRef} />
       </div>
 
-      <div className="flex gap-2 pt-4 border-t border-primary/5">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Ответить клиенту..."
-          className="flex-1 min-w-0 bg-background rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
+      <div className="flex gap-2 pt-4 border-t border-primary/5 items-center">
+        {!recording && (
+          <>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Ответить клиенту..."
+              className="flex-1 min-w-0 bg-background rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
+            />
+            {text.trim() && (
+              <button
+                onClick={handleSend}
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 bg-primary text-primary-inv hover:scale-105 active:scale-95"
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </>
+        )}
+        <VoiceRecorder
+          onRecorded={handleVoice}
+          onRecordingChange={setRecording}
+          uploading={uploadingVoice}
         />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0",
-            text.trim()
-              ? "bg-primary text-primary-inv hover:scale-105 active:scale-95"
-              : "bg-primary/10 text-primary/30"
-          )}
-        >
-          <Send size={18} />
-        </button>
       </div>
     </div>
   );

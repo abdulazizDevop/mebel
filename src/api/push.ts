@@ -45,7 +45,7 @@ function pushSupported(): boolean {
  * Returns true on success, false on any silent skip (no support, denied
  * permission, no JWT, etc.). Caller should never block a UI flow on it.
  */
-export async function subscribeToPush(): Promise<boolean> {
+export async function subscribeToPush(orderId?: string): Promise<boolean> {
   if (!pushSupported()) return false;
   // Don't even ask — caller likely had a chance to show their own opt-in
   // explainer first. If permission was already denied, skip.
@@ -53,7 +53,9 @@ export async function subscribeToPush(): Promise<boolean> {
 
   const slot: 'admin' | 'customer' | null =
     tokenStore.get('admin') ? 'admin' : tokenStore.get('customer') ? 'customer' : null;
-  if (!slot) return false;
+  // A guest (no JWT) subscribes keyed by their order UUID so admin replies can
+  // still push to their device. Without a slot AND without an order, skip.
+  if (!slot && !orderId) return false;
 
   if (Notification.permission !== 'granted') {
     const result = await Notification.requestPermission();
@@ -80,10 +82,16 @@ export async function subscribeToPush(): Promise<boolean> {
   const subJson = subscription.toJSON();
   if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) return false;
 
-  await api.post('/push/subscriptions', {
-    endpoint: subJson.endpoint,
-    keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
-  }, { tokenSlot: slot });
+  await api.post(
+    '/push/subscriptions',
+    {
+      endpoint: subJson.endpoint,
+      keys: { p256dh: subJson.keys.p256dh, auth: subJson.keys.auth },
+      // Authed users key by their JWT; guests key by the order UUID.
+      ...(slot ? {} : { order_id: orderId }),
+    },
+    slot ? { tokenSlot: slot } : undefined,
+  );
   return true;
 }
 

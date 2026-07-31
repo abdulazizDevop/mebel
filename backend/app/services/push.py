@@ -18,6 +18,7 @@ from typing import Any, Iterable
 
 from pywebpush import WebPushException, webpush
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
@@ -37,9 +38,11 @@ def store_subscription(
     user_id: str | None,
     customer_id: str | None,
     user_agent: str | None,
+    order_id: str | None = None,
 ) -> PushToken:
-    """Insert or update a Web Push subscription. Same `endpoint` from the
-    same browser collapses to one row (replacing the keys if they rotated)."""
+    """Insert or update a Web Push subscription. Uniqueness is (token, order_id)
+    so the same browser endpoint can hold one row per guest order plus its
+    admin/customer row (order_id NULL) without collapsing them."""
     endpoint = subscription.get("endpoint")
     if not endpoint:
         raise ValueError("subscription is missing 'endpoint'")
@@ -48,25 +51,45 @@ def store_subscription(
         raise ValueError("subscription is missing 'keys.p256dh' / 'keys.auth'")
 
     raw = json.dumps(subscription, separators=(",", ":"), sort_keys=True)
-    existing = db.execute(select(PushToken).where(PushToken.token == raw)).scalar_one_or_none()
-    if existing is not None:
-        existing.user_id = user_id
-        existing.customer_id = customer_id
+
+    def _find() -> PushToken | None:
+        return db.execute(
+            select(PushToken).where(PushToken.token == raw, PushToken.order_id == order_id)
+        ).scalar_one_or_none()
+
+    def _apply(row: PushToken) -> PushToken:
+        row.user_id = user_id
+        row.customer_id = customer_id
         if user_agent:
-            existing.user_agent = user_agent[:255]
+            row.user_agent = user_agent[:255]
         db.commit()
-        db.refresh(existing)
-        return existing
+        db.refresh(row)
+        return row
+
+    existing = _find()
+    if existing is not None:
+        return _apply(existing)
 
     row = PushToken(
         user_id=user_id,
         customer_id=customer_id,
+        order_id=order_id,
         token=raw,
         platform=PushPlatform.web,
         user_agent=(user_agent or None) and user_agent[:255],
     )
     db.add(row)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request inserted the same (token, order_id) — or the same
+        # token with order_id NULL, blocked by the partial unique index. Recover
+        # by updating the row the winner created instead of erroring.
+        db.rollback()
+        existing = _find()
+        if existing is not None:
+            return _apply(existing)
+        raise
     db.refresh(row)
     return row
 
@@ -136,6 +159,16 @@ def subscriptions_for_customer(db: Session, customer_id: str) -> list[PushToken]
     return list(
         db.execute(
             select(PushToken).where(PushToken.customer_id == customer_id)
+        ).scalars().all()
+    )
+
+
+def subscriptions_for_order(db: Session, order_id: str) -> list[PushToken]:
+    """Guest device subscriptions keyed to a specific order — how a not-logged-in
+    customer receives the admin's reply push."""
+    return list(
+        db.execute(
+            select(PushToken).where(PushToken.order_id == order_id)
         ).scalars().all()
     )
 

@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -22,10 +24,20 @@ from app.rate_limit import limiter, rate_limit_exceeded_handler
 
 settings = get_settings()
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Capture the running event loop so the sync REST chat endpoints can
+    # schedule WebSocket broadcasts back onto it (ws_chat.broadcast_threadsafe).
+    ws_chat_router.set_main_loop(asyncio.get_running_loop())
+    yield
+
+
 app = FastAPI(
     title="Mebel API",
     version="0.1.0",
     description="Backend for the Mebel furniture storefront and admin panel.",
+    lifespan=lifespan,
 )
 
 # Brute-force protection: per-route limits live on the decorator (auth.py /
@@ -47,6 +59,13 @@ app.add_middleware(
 @app.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/config", tags=["meta"])
+def public_config() -> dict[str, str]:
+    """Public runtime config the SPA reads on load. Kept server-side so the
+    owner can change the WhatsApp number via env without a frontend rebuild."""
+    return {"whatsapp_phone": settings.whatsapp_phone}
 
 
 app.include_router(auth_router.router)

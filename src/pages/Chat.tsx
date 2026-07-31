@@ -4,15 +4,22 @@ import { Send, ArrowLeft, Package, MessageCircle } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../utils/cn';
-import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, useOrderChatSocket } from '../api';
+import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, uploadAudio, useOrderChatSocket } from '../api';
+import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
+import { WhatsAppButton } from '../components/WhatsAppButton';
 
 export function Chat() {
-  const { orders, activeOrderId, setActiveOrderId, sendMessage, adminSession, appendChatMessage } = useStore();
+  const { orders, activeOrderId, setActiveOrderId, sendMessage, adminSession, appendChatMessage, whatsappPhone } = useStore();
   const navigate = useNavigate();
   const [text, setText] = useState('');
+  const [recording, setRecording] = useState(false);
+  const [uploadingVoice, setUploadingVoice] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const order = orders.find((o) => o.id === activeOrderId);
+  // Logged-in customers authenticate the socket with their JWT; guests connect
+  // tokenless (capability = order UUID) — both land on the same live hub.
+  const isGuest = !tokenStore.get('customer');
 
   // Live updates — admin replies and the customer's own broadcasts arrive
   // here as JSON frames; we hand them to the store which dedupes by id.
@@ -23,13 +30,13 @@ export function Chat() {
     },
     [activeOrderId, appendChatMessage],
   );
-  const chatSocket = useOrderChatSocket(activeOrderId, 'customer', handleSocketMessage);
+  const chatSocket = useOrderChatSocket(activeOrderId, isGuest ? 'guest' : 'customer', handleSocketMessage);
 
-  // Guests have no customer JWT, so the WebSocket above never connects. Poll
-  // the public order-chat endpoint (keyed by the order UUID) so admin replies
-  // still land in the UI. Logged-in customers keep the live socket instead.
+  // Safety-net poll for guests: if the socket is momentarily down, still pull
+  // admin replies from the public order-chat endpoint. Deduped by id, so it
+  // never double-inserts what the live socket already delivered.
   useEffect(() => {
-    if (!activeOrderId || tokenStore.get('customer')) return;
+    if (!activeOrderId || !isGuest) return;
     let cancelled = false;
     const pull = async () => {
       try {
@@ -41,12 +48,12 @@ export function Chat() {
       }
     };
     pull();
-    const timer = setInterval(pull, 4000);
+    const timer = setInterval(pull, 5000);
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [activeOrderId, appendChatMessage]);
+  }, [activeOrderId, isGuest, appendChatMessage]);
 
   // Admins should never land on the customer-facing chat — their conversations
   // live in /admin → Заказы. Bounce them.
@@ -114,7 +121,7 @@ export function Chat() {
                   </p>
                   {lastMsg && (
                     <p className="text-[11px] opacity-40 truncate mt-1">
-                      {lastMsg.from === 'admin' ? '↩ Админ: ' : 'Вы: '}{lastMsg.text}
+                      {lastMsg.from === 'admin' ? '↩ Админ: ' : 'Вы: '}{lastMsg.audioUrl ? '🎤 Голосовое' : lastMsg.text}
                     </p>
                   )}
                 </div>
@@ -144,6 +151,22 @@ export function Chat() {
     setText('');
   };
 
+  const handleVoice = async (file: File, durationSec: number) => {
+    setUploadingVoice(true);
+    try {
+      // Upload the blob first (server transcodes to MP3), then send a message
+      // carrying its URL — live via socket, or REST fallback.
+      const url = await uploadAudio(file, order.id);
+      if (!chatSocket.send('', url, durationSec)) {
+        await sendMessage(order.id, 'client', '', url, durationSec);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось отправить голосовое сообщение');
+    } finally {
+      setUploadingVoice(false);
+    }
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-200px)] max-w-lg mx-auto">
       {/* Chat header — back button only appears when there are multiple
@@ -164,6 +187,14 @@ export function Chat() {
             {order.items.length > 0 ? `${order.items.length} товаров — ${order.total.toLocaleString('ru-RU')} ₽` : 'Индивидуальный заказ'}
           </p>
         </div>
+        {whatsappPhone && (
+          <WhatsAppButton
+            phone={whatsappPhone}
+            variant="icon"
+            label="Написать в WhatsApp"
+            message={`Здравствуйте! По заказу № ${order.id.slice(0, 8).toUpperCase()} (${order.total.toLocaleString('ru-RU')} ₽).`}
+          />
+        )}
         {orders.length > 1 && (
           <span className="text-[10px] opacity-40 bg-surface rounded-full px-2 py-1 flex-shrink-0">
             {orders.indexOf(order) + 1}/{orders.length}
@@ -191,7 +222,8 @@ export function Chat() {
             {msg.from === 'client' && (
               <p className="text-[9px] font-bold text-primary-inv/50 mb-1">{order.name}</p>
             )}
-            <p className="text-sm whitespace-pre-wrap">{msg.text}</p>
+            {msg.audioUrl && <AudioMessage src={msg.audioUrl} dark={msg.from === 'client'} />}
+            {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
             <p className={cn(
               "text-[10px] mt-1",
               msg.from === 'client' ? "text-primary-inv/50 text-right" : "text-primary/30"
@@ -204,26 +236,31 @@ export function Chat() {
       </div>
 
       {/* Input */}
-      <div className="flex gap-2 pt-4 border-t border-primary/5">
-        <input
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder="Написать сообщение..."
-          className="flex-1 bg-surface rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
+      <div className="flex gap-2 pt-4 border-t border-primary/5 items-center">
+        {!recording && (
+          <>
+            <input
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+              placeholder="Написать сообщение..."
+              className="flex-1 bg-surface rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
+            />
+            {text.trim() && (
+              <button
+                onClick={handleSend}
+                className="w-12 h-12 rounded-full flex items-center justify-center transition-all bg-primary text-primary-inv hover:scale-105 active:scale-95 flex-shrink-0"
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </>
+        )}
+        <VoiceRecorder
+          onRecorded={handleVoice}
+          onRecordingChange={setRecording}
+          uploading={uploadingVoice}
         />
-        <button
-          onClick={handleSend}
-          disabled={!text.trim()}
-          className={cn(
-            "w-12 h-12 rounded-full flex items-center justify-center transition-all",
-            text.trim()
-              ? "bg-primary text-primary-inv hover:scale-105 active:scale-95"
-              : "bg-primary/10 text-primary/30"
-          )}
-        >
-          <Send size={18} />
-        </button>
       </div>
     </div>
   );

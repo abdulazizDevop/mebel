@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
@@ -23,13 +23,34 @@ from app.schemas.order import (
     OrderOut,
     OrderStatusUpdate,
 )
+from app.api.ws_chat import hub
 from app.services.push import (
     send_to_subscriptions,
     subscriptions_for_admins,
     subscriptions_for_customer,
+    subscriptions_for_order,
 )
 
 router = APIRouter(prefix="/orders", tags=["orders"])
+
+
+def _chat_payload(msg: ChatMessage) -> dict:
+    """Same wire shape ws_chat.py broadcasts, so a REST-sent message reaches any
+    peer sitting on the order's WebSocket (fallback path when a sender's socket
+    isn't OPEN)."""
+    return {
+        "id": msg.id,
+        "sender": msg.sender.value,
+        "sender_user_id": msg.sender_user_id,
+        "text": msg.text,
+        "audio_url": msg.audio_url,
+        "audio_duration": msg.audio_duration,
+        "created_at": msg.created_at.isoformat(),
+    }
+
+
+def _push_body(msg: ChatMessage) -> str:
+    return msg.text[:140] if msg.text else "🎤 Голосовое сообщение"
 
 
 def _load_order(db: Session, order_id: str) -> Order:
@@ -215,22 +236,37 @@ def send_chat_as_admin(
         sender=ChatSender.admin,
         sender_user_id=user.id,
         text=payload.text.strip(),
+        audio_url=payload.audio_url,
+        audio_duration=payload.audio_duration,
     )
     db.add(msg)
-    if order.status == OrderStatus.new:
-        order.status = OrderStatus.chatting
+    # Guarded new→chatting bump (see ws_chat.py) so a concurrent terminal-status
+    # change isn't reverted by this request's stale-loaded order object.
+    db.execute(
+        update(Order)
+        .where(Order.id == order.id, Order.status == OrderStatus.new)
+        .values(status=OrderStatus.chatting)
+    )
     db.commit()
     db.refresh(msg)
 
-    # Fan-out web push to the customer's registered browsers so they hear
-    # back even when their tab is closed.
+    # Push the saved message to any peer live on the order's WebSocket (the
+    # customer/guest side), since this REST path doesn't go through the hub.
+    hub.broadcast_threadsafe(order.id, _chat_payload(msg))
+
+    # Fan-out web push to the customer's registered browsers AND the guest
+    # device keyed to this order, so they hear back with the tab closed.
+    targets = []
     if order.customer_id:
+        targets += subscriptions_for_customer(db, order.customer_id)
+    targets += subscriptions_for_order(db, order.id)
+    if targets:
         send_to_subscriptions(
             db,
-            subscriptions_for_customer(db, order.customer_id),
+            targets,
             {
                 "title": "ROOOMEBEL — новое сообщение",
-                "body": msg.text[:140],
+                "body": _push_body(msg),
                 "url": "/chat",
                 "order_id": order.id,
             },
@@ -256,10 +292,16 @@ def send_chat_as_customer(
         order_id=order.id,
         sender=ChatSender.client,
         text=payload.text.strip(),
+        audio_url=payload.audio_url,
+        audio_duration=payload.audio_duration,
     )
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # Live-push to any admin sitting on the order's WebSocket (this REST path
+    # doesn't go through the hub).
+    hub.broadcast_threadsafe(order.id, _chat_payload(msg))
 
     # Notify every registered admin so the owner sees a system push even when
     # they don't have the dashboard open.
@@ -268,7 +310,7 @@ def send_chat_as_customer(
         subscriptions_for_admins(db),
         {
             "title": f"ROOOMEBEL — новое сообщение от {customer.name}",
-            "body": msg.text[:140],
+            "body": _push_body(msg),
             "url": "/admin",
             "order_id": order.id,
         },
@@ -315,10 +357,16 @@ def send_chat_as_guest(
         order_id=order.id,
         sender=ChatSender.client,
         text=payload.text.strip(),
+        audio_url=payload.audio_url,
+        audio_duration=payload.audio_duration,
     )
     db.add(msg)
     db.commit()
     db.refresh(msg)
+
+    # Live-push to any admin sitting on the order's WebSocket (this REST path
+    # doesn't go through the hub).
+    hub.broadcast_threadsafe(order.id, _chat_payload(msg))
 
     # Notify every registered admin so the owner hears about the reply even
     # with the dashboard closed.
@@ -327,7 +375,7 @@ def send_chat_as_guest(
         subscriptions_for_admins(db),
         {
             "title": f"ROOOMEBEL — новое сообщение от {order.customer_name}",
-            "body": msg.text[:140],
+            "body": _push_body(msg),
             "url": "/admin",
             "order_id": order.id,
         },

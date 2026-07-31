@@ -3,9 +3,10 @@
 FROM public.ecr.aws/docker/library/python:3.12-slim
 
 # psycopg2-binary needs libpq + a compiler-free runtime. Slim images don't
-# include curl by default — useful for the healthcheck.
+# include curl by default — useful for the healthcheck. ffmpeg transcodes
+# recorded voice notes (webm/opus, mp4/aac) to MP3 for universal playback.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends curl libpq5 \
+ && apt-get install -y --no-install-recommends curl libpq5 ffmpeg \
  && rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

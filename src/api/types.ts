@@ -103,6 +103,8 @@ export interface ChatMessageDTO {
   sender: ChatSender;
   sender_user_id: string | null;
   text: string;
+  audio_url: string | null;
+  audio_duration: number | null;
   created_at: string;
 }
 
