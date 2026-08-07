@@ -1,8 +1,34 @@
+import { Phone } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-/* Deep-links to WhatsApp with a pre-filled message. On a product page the
- * message includes the product name + a link back to this page so the owner
- * knows exactly which item the customer means. Hidden when no number is set. */
+/* Deep-links to WhatsApp with a pre-filled message, plus a tap-to-call link.
+ * Both numbers come from the backend /config so the owner can change them
+ * without a rebuild. Each piece hides itself when its number is empty. */
+
+/** 79280484048 → "+7 (928) 048-40-48"; falls back to "+<digits>". */
+export function formatPhoneDisplay(phone: string): string {
+  const d = phone.replace(/\D/g, '');
+  if (d.length === 11 && (d[0] === '7' || d[0] === '8')) {
+    const n = '7' + d.slice(1);
+    return `+7 (${n.slice(1, 4)}) ${n.slice(4, 7)}-${n.slice(7, 9)}-${n.slice(9, 11)}`;
+  }
+  return d ? `+${d}` : '';
+}
+
+export function CallLink({ phone, className }: { phone: string; className?: string }) {
+  const digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+  return (
+    <a
+      href={`tel:+${digits}`}
+      className={cn('flex items-center justify-center gap-1.5 text-sm', className)}
+    >
+      <Phone size={14} className="opacity-60" />
+      <span className="opacity-60">Или позвонить:</span>
+      <span className="font-bold">{formatPhoneDisplay(digits)}</span>
+    </a>
+  );
+}
 
 function WhatsAppIcon({ size = 18 }: { size?: number }) {
   return (
@@ -21,7 +47,7 @@ export function WhatsAppButton({
 }: {
   phone: string;
   message: string;
-  variant?: 'solid' | 'icon';
+  variant?: 'solid' | 'outline' | 'icon';
   className?: string;
   label?: string;
 }) {
@@ -46,13 +72,21 @@ export function WhatsAppButton({
     );
   }
 
+  // Outline = white pill with green icon/text/border (matches the product-page
+  // mockup). Solid = filled green.
+  const look =
+    variant === 'outline'
+      ? 'bg-surface text-[#25D366] border-2 border-[#25D366]'
+      : 'bg-[#25D366] text-white';
+
   return (
     <a
       href={href}
       target="_blank"
       rel="noopener noreferrer"
       className={cn(
-        'flex items-center justify-center gap-2 rounded-full py-4 px-6 font-bold bg-[#25D366] text-white hover:scale-[1.02] active:scale-[0.98] transition-all',
+        'flex items-center justify-center gap-2 rounded-full py-4 px-6 font-bold hover:scale-[1.02] active:scale-[0.98] transition-all',
+        look,
         className,
       )}
     >

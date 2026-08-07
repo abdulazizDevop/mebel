@@ -1,11 +1,10 @@
 import { useRef, useState, useMemo, Suspense } from 'react';
-import { Canvas, useFrame, useLoader, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useLoader } from '@react-three/fiber';
 import { OrbitControls, ContactShadows, Environment, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { motion, AnimatePresence } from 'framer-motion';
 import { cn } from '../utils/cn';
-import { RotateCcw, Move3D, ZoomIn } from 'lucide-react';
-import { Product, ColorVariant } from '../data/products';
+import { RotateCcw, ZoomIn } from 'lucide-react';
+import { Product } from '../data/products';
 
 /* ───── 3D Product Panel ───── */
 function ProductPanel({ imageUrl, dimensions }: { imageUrl: string; dimensions: { w: number; h: number; d: number } }) {
@@ -156,7 +155,6 @@ interface ProductConfiguratorProps {
 export function ProductConfigurator({ product, activeColor, onColorChange }: ProductConfiguratorProps) {
   const [activeMaterial, setActiveMaterial] = useState(0);
   const [activeStyle, setActiveStyle] = useState(0);
-  const [showConfigurator, setShowConfigurator] = useState(false);
 
   // Parse dimensions for 3D proportions
   const dims = useMemo(() => {

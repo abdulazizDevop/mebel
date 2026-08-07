@@ -49,9 +49,12 @@ class Settings(BaseSettings):
     audio_max_duration_sec: int = 600
 
     # WhatsApp deep-link target for the "order via WhatsApp" button. Digits only
-    # in international form (no +, spaces or dashes), e.g. 79001234567. Empty
+    # in international form (no +, spaces or dashes), e.g. 79285199424. Empty
     # hides the button.
     whatsapp_phone: str = ""
+    # "Позвонить" (call) button target — a tel: link. Digits only, e.g.
+    # 79280484048. Empty hides the call line.
+    call_phone: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:

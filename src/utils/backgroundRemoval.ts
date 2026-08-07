@@ -47,7 +47,7 @@ export async function replaceBackground(
   const { removeBackground } = await loadLib();
 
   const cutoutBlob = await removeBackground(file, {
-    progress: (key, current, total) => {
+    progress: (_key, current, total) => {
       // The library emits progress per asset (model download, fetch, etc.).
       // Coalesce into a single 0-100 number for the UI.
       if (total > 0 && onProgress) {

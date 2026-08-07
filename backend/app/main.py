@@ -17,10 +17,15 @@ from app.api import customers as customers_router
 from app.api import orders as orders_router
 from app.api import products as products_router
 from app.api import push as push_router
+from app.api import settings as settings_router
 from app.api import uploads as uploads_router
 from app.api import ws_chat as ws_chat_router
 from app.config import get_settings
+from app.database import get_db
 from app.rate_limit import limiter, rate_limit_exceeded_handler
+from app.services.settings_store import get_contact_config
+from fastapi import Depends
+from sqlalchemy.orm import Session
 
 settings = get_settings()
 
@@ -62,10 +67,10 @@ def health() -> dict[str, str]:
 
 
 @app.get("/config", tags=["meta"])
-def public_config() -> dict[str, str]:
-    """Public runtime config the SPA reads on load. Kept server-side so the
-    owner can change the WhatsApp number via env without a frontend rebuild."""
-    return {"whatsapp_phone": settings.whatsapp_phone}
+def public_config(db: Session = Depends(get_db)) -> dict[str, str]:
+    """Public runtime config the SPA reads on load. Values come from the DB
+    (owner-editable in the admin Settings tab), falling back to env defaults."""
+    return get_contact_config(db)
 
 
 app.include_router(auth_router.router)
@@ -76,6 +81,7 @@ app.include_router(products_router.router)
 app.include_router(orders_router.router)
 app.include_router(analytics_router.router)
 app.include_router(push_router.router)
+app.include_router(settings_router.router)
 app.include_router(uploads_router.router)
 app.include_router(ws_chat_router.router)
 

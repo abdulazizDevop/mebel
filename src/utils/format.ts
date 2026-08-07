@@ -6,7 +6,6 @@
  */
 
 const RU_PREFIXES = /^(7|8)/;
-const UZ_PREFIX = /^9{0,1}9{0,1}8/;
 
 /** Strip everything that isn't a digit. Pasting "+998 (90) 111-22-33" returns "998901112233". */
 function digitsOnly(input: string): string {

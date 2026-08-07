@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
@@ -27,7 +27,7 @@ const letterExitVariants = {
 };
 
 const letterEnterVariants = {
-  initial: (i: number) => ({
+  initial: (_i: number) => ({
     y: -40 - Math.random() * 30,
     opacity: 0,
     rotate: (Math.random() - 0.5) * 45,
@@ -75,82 +75,21 @@ function FallingTitle({ text }: { text: string }) {
   );
 }
 
-// Random initial tilt directions for the "tumbler" drop-in effect
-const dropVariants = [
-  { rotate: -8, x: -30 },
-  { rotate: 6, x: 20 },
-  { rotate: -5, x: -15 },
-  { rotate: 9, x: 25 },
-  { rotate: -7, x: -20 },
-  { rotate: 5, x: 15 },
-];
-
 function TumblerCard({ product, index, onOrder }: { product: Product; index: number; onOrder: (e: React.MouseEvent, product: Product) => void }) {
-  const cardRef = useRef<HTMLDivElement>(null);
-  const x = useMotionValue(0);
-  const y = useMotionValue(0);
-
-  const rotateX = useTransform(y, [-150, 150], [12, -12]);
-  const rotateY = useTransform(x, [-150, 150], [-12, 12]);
-
-  const springRotateX = useSpring(rotateX, { stiffness: 300, damping: 20 });
-  const springRotateY = useSpring(rotateY, { stiffness: 300, damping: 20 });
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    x.set(e.clientX - centerX);
-    y.set(e.clientY - centerY);
-  };
-
-  const handleMouseLeave = () => {
-    x.set(0);
-    y.set(0);
-  };
-
-  const drop = dropVariants[index % dropVariants.length];
-
+  // Lightweight entry: a short fade+slide with a small, capped stagger. The
+  // previous per-card 3D tilt (springs + perspective + preserve-3d +
+  // will-change-transform on every card) forced 20+ permanent compositor layers
+  // and a heavy staggered spring, which janked even on a strong GPU. Removed in
+  // favour of a cheap CSS-friendly transform so the grid scrolls/animates fast.
   return (
     <motion.div
       key={product.id}
-      initial={{
-        opacity: 0,
-        y: -120,
-        rotate: drop.rotate,
-        x: drop.x,
-        scale: 0.7,
-      }}
-      animate={{
-        opacity: 1,
-        y: 0,
-        rotate: 0,
-        x: 0,
-        scale: 1,
-      }}
-      transition={{
-        delay: index * 0.12,
-        type: 'spring',
-        stiffness: 120,
-        damping: 14,
-        mass: 0.8,
-      }}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, delay: Math.min(index, 6) * 0.04, ease: 'easeOut' }}
       className="group"
-      style={{ perspective: 800 }}
     >
-      <motion.div
-        ref={cardRef}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={handleMouseLeave}
-        style={{
-          rotateX: springRotateX,
-          rotateY: springRotateY,
-          transformStyle: 'preserve-3d',
-        }}
-        whileTap={{ scale: 0.95, rotateX: 4, rotateY: -4 }}
-        className="will-change-transform"
-      >
+      <motion.div whileTap={{ scale: 0.97 }}>
         <Link to={`/product/${product.id}`}>
           <div
             className="relative aspect-square mb-4 bg-surface rounded-2xl overflow-hidden transition-shadow duration-300"
@@ -168,7 +107,9 @@ function TumblerCard({ product, index, onOrder }: { product: Product; index: num
             <img
               src={product.image}
               alt={product.name}
-              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out"
+              loading="lazy"
+              decoding="async"
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             />
           </div>
 
@@ -350,7 +291,6 @@ function CustomOrderForm() {
 }
 
 export function Catalog() {
-  const navigate = useNavigate();
   const { addToCart, allProducts: products, recommendations, allCategories: storeCats } = useStore();
   const categoryList = storeCats.map((cat) => ({ key: cat, label: cat }));
   const [showOrderToast, setShowOrderToast] = useState(false);
@@ -453,7 +393,7 @@ export function Catalog() {
       {/* "Рекомендуем для вас" — horizontal scroll section from reference */}
       <div className="mb-12">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="text-2xl font-bold">Рекомендуем для вас</h3>
+          <h3 className="font-serif text-2xl font-bold">Рекомендуем для вас</h3>
           <Link to="#catalog-grid" className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
             <ArrowRight size={20} />
           </Link>
@@ -490,6 +430,8 @@ export function Catalog() {
                   <img
                     src={product.image}
                     alt={product.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>
@@ -637,7 +579,7 @@ export function Catalog() {
 
         {/* Active category title with falling letters */}
         <div className="h-10 flex items-center">
-          <h3 className="text-2xl font-bold tracking-tight">
+          <h3 className="font-serif text-2xl font-bold tracking-tight">
             <FallingTitle text={activeCategory} />
           </h3>
         </div>

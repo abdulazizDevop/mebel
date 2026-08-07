@@ -1,10 +1,10 @@
 import { useCallback, useState, useRef, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Send, ArrowLeft, Package, MessageCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { Send, ArrowLeft, Package, MessageCircle, ImagePlus } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { useNavigate } from 'react-router-dom';
 import { cn } from '../utils/cn';
-import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, uploadAudio, useOrderChatSocket } from '../api';
+import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, uploadAudio, uploadChatImage, useOrderChatSocket } from '../api';
 import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
 import { WhatsAppButton } from '../components/WhatsAppButton';
 
@@ -157,11 +157,27 @@ export function Chat() {
       // Upload the blob first (server transcodes to MP3), then send a message
       // carrying its URL — live via socket, or REST fallback.
       const url = await uploadAudio(file, order.id);
-      if (!chatSocket.send('', url, durationSec)) {
-        await sendMessage(order.id, 'client', '', url, durationSec);
+      const attachment = { audioUrl: url, audioDuration: durationSec };
+      if (!chatSocket.send('', attachment)) {
+        await sendMessage(order.id, 'client', '', attachment);
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Не удалось отправить голосовое сообщение');
+    } finally {
+      setUploadingVoice(false);
+    }
+  };
+
+  const handleImage = async (file: File) => {
+    setUploadingVoice(true);
+    try {
+      const url = await uploadChatImage(file, order.id);
+      const attachment = { imageUrl: url };
+      if (!chatSocket.send('', attachment)) {
+        await sendMessage(order.id, 'client', '', attachment);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось отправить изображение');
     } finally {
       setUploadingVoice(false);
     }
@@ -222,6 +238,11 @@ export function Chat() {
             {msg.from === 'client' && (
               <p className="text-[9px] font-bold text-primary-inv/50 mb-1">{order.name}</p>
             )}
+            {msg.imageUrl && (
+              <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+                <img src={msg.imageUrl} alt="Вложение" loading="lazy" className="rounded-xl max-h-56 w-auto object-cover" />
+              </a>
+            )}
             {msg.audioUrl && <AudioMessage src={msg.audioUrl} dark={msg.from === 'client'} />}
             {msg.text && <p className="text-sm whitespace-pre-wrap">{msg.text}</p>}
             <p className={cn(
@@ -246,13 +267,27 @@ export function Chat() {
               placeholder="Написать сообщение..."
               className="flex-1 bg-surface rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
             />
-            {text.trim() && (
+            {text.trim() ? (
               <button
                 onClick={handleSend}
                 className="w-12 h-12 rounded-full flex items-center justify-center transition-all bg-primary text-primary-inv hover:scale-105 active:scale-95 flex-shrink-0"
               >
                 <Send size={18} />
               </button>
+            ) : (
+              <label className="w-12 h-12 rounded-full flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all flex-shrink-0 cursor-pointer">
+                <ImagePlus size={18} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f) handleImage(f);
+                  }}
+                />
+              </label>
             )}
           </>
         )}

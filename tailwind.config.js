@@ -17,6 +17,8 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'Gilroy', 'sans-serif'],
+        // Premium serif for display headings / taglines.
+        serif: ['"Playfair Display"', 'Georgia', 'serif'],
       },
       borderRadius: {
         'pill': '9999px',

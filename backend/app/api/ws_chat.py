@@ -101,22 +101,31 @@ class OrderChatHub:
 hub = OrderChatHub()
 
 
-def _clean_audio(data: dict[str, Any]) -> tuple[str | None, int | None]:
-    audio_url = data.get("audio_url")
-    # Only trust a URL the server itself minted via /uploads/audio — never an
-    # arbitrary external URL a client could inject as a "voice message".
-    if not isinstance(audio_url, str) or not audio_url.strip() or not is_own_storage_url(audio_url):
-        audio_url = None
+def _own_url(value: Any) -> str | None:
+    """Accept a URL only if the server itself minted it (via /uploads/*) — never
+    an arbitrary external URL a client could inject as an attachment."""
+    if not isinstance(value, str) or not value.strip() or not is_own_storage_url(value):
+        return None
+    return value
+
+
+def _clean_attachments(data: dict[str, Any]) -> tuple[str | None, int | None, str | None]:
+    audio_url = _own_url(data.get("audio_url"))
+    image_url = _own_url(data.get("image_url"))
     audio_duration = data.get("audio_duration")
     if not isinstance(audio_duration, int) or isinstance(audio_duration, bool):
         audio_duration = None
     elif audio_duration < 0 or audio_duration > 3600:
         audio_duration = None
-    return audio_url, audio_duration
+    return audio_url, audio_duration, image_url
 
 
 def _push_body(msg: ChatMessage) -> str:
-    return msg.text[:140] if msg.text else "🎤 Голосовое сообщение"
+    if msg.text:
+        return msg.text[:140]
+    if msg.image_url:
+        return "📷 Фото"
+    return "🎤 Голосовое сообщение"
 
 
 @router.websocket("/ws/orders/{order_id}/chat")
@@ -171,8 +180,8 @@ async def chat_socket(
                 data = data or {}
                 text = data.get("text", "")
                 text = text.strip() if isinstance(text, str) else ""
-                audio_url, audio_duration = _clean_audio(data)
-                if not text and not audio_url:
+                audio_url, audio_duration, image_url = _clean_attachments(data)
+                if not text and not audio_url and not image_url:
                     continue
 
                 if is_admin:
@@ -183,6 +192,7 @@ async def chat_socket(
                         text=text,
                         audio_url=audio_url,
                         audio_duration=audio_duration,
+                        image_url=image_url,
                     )
                     # Bump status on first admin reply so the dashboard stops
                     # showing the order as "new". Guarded DB-side (WHERE
@@ -202,6 +212,7 @@ async def chat_socket(
                         text=text,
                         audio_url=audio_url,
                         audio_duration=audio_duration,
+                        image_url=image_url,
                     )
                 db.add(msg)
                 db.commit()
@@ -214,6 +225,7 @@ async def chat_socket(
                     "text": msg.text,
                     "audio_url": msg.audio_url,
                     "audio_duration": msg.audio_duration,
+                    "image_url": msg.image_url,
                     "created_at": msg.created_at.isoformat(),
                 }
                 await hub.broadcast(order_id, payload_out)

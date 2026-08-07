@@ -2,7 +2,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Trash2, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { cn } from '../utils/cn';
 
 export function Favorites() {
   const navigate = useNavigate();

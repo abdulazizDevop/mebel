@@ -95,3 +95,19 @@ async def upload_audio_endpoint(
     _authorize_chat_upload(authorization, order_id, db)
     url = await upload_audio(file, prefix="voice")
     return UploadResponse(url=url)
+
+
+# Photo / screenshot attached in chat. Same chat auth as voice (not admin-only)
+# so customers and guests can attach.
+@router.post("/chat-image", response_model=UploadResponse)
+@limiter.limit("30/minute")
+async def upload_chat_image_endpoint(
+    request: Request,
+    db: Annotated[Session, Depends(get_db)],
+    file: UploadFile,
+    order_id: Annotated[str | None, Form()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    _authorize_chat_upload(authorization, order_id, db)
+    url = await upload_image(file, prefix="chat")
+    return UploadResponse(url=url)

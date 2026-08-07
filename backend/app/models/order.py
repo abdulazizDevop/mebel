@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -42,6 +42,8 @@ class Order(Base):
     status: Mapped[OrderStatus] = mapped_column(
         Enum(OrderStatus, native_enum=False), nullable=False, default=OrderStatus.new
     )
+    # Admin can archive an order to hide it from the active list without deleting.
+    archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0", default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
     items: Mapped[list["OrderItem"]] = relationship(
@@ -98,6 +100,8 @@ class ChatMessage(Base):
     # Both NULL for plain text messages.
     audio_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     audio_duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Image attachment (photo / screenshot) — public URL, NULL for other messages.
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
     order: Mapped[Order] = relationship(back_populates="chat")

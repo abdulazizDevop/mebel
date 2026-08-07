@@ -1,4 +1,5 @@
 import { api, tokenStore } from './client';
+import type { ChatAttachment } from './chatSocket';
 import type {
   AdminUser,
   AdminUserCreateDTO,
@@ -108,35 +109,40 @@ interface ChatBody {
   text: string;
   audio_url?: string;
   audio_duration?: number;
+  image_url?: string;
 }
-const chatBody = (text: string, audioUrl?: string, audioDuration?: number): ChatBody => ({
+const chatBody = (text: string, a?: ChatAttachment): ChatBody => ({
   text,
-  ...(audioUrl ? { audio_url: audioUrl, audio_duration: audioDuration } : {}),
+  ...(a?.audioUrl ? { audio_url: a.audioUrl, audio_duration: a.audioDuration } : {}),
+  ...(a?.imageUrl ? { image_url: a.imageUrl } : {}),
 });
 
-export const sendChatAsAdmin = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat`, chatBody(text, audioUrl, audioDuration), { tokenSlot: 'admin' });
-export const sendChatAsCustomer = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/customer`, chatBody(text, audioUrl, audioDuration), { tokenSlot: 'customer' });
+export const sendChatAsAdmin = (orderId: string, text: string, a?: ChatAttachment) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat`, chatBody(text, a), { tokenSlot: 'admin' });
+export const sendChatAsCustomer = (orderId: string, text: string, a?: ChatAttachment) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/customer`, chatBody(text, a), { tokenSlot: 'customer' });
 
 /* ─── Guest chat (order-link capability, no auth) ─── */
 /** Poll a guest order's chat by UUID — how a not-logged-in customer sees admin replies. */
 export const getOrderChatPublic = (orderId: string) =>
   api.get<ChatMessageDTO[]>(`/orders/${orderId}/chat`);
 /** Guest customer reply, keyed by order UUID (no token). */
-export const sendChatAsGuest = (orderId: string, text: string, audioUrl?: string, audioDuration?: number) =>
-  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/guest`, chatBody(text, audioUrl, audioDuration));
+export const sendChatAsGuest = (orderId: string, text: string, a?: ChatAttachment) =>
+  api.post<ChatMessageDTO>(`/orders/${orderId}/chat/guest`, chatBody(text, a));
 
-/* ─── Voice upload ─── */
-/** Uploads a recorded audio blob (any browser format); the server transcodes to
- *  MP3 and returns its public URL. Admins/customers authenticate by token; a
- *  guest passes their unclaimed order's UUID as the bearer capability. */
-export async function uploadAudio(file: File, orderId?: string): Promise<string> {
+/* ─── Admin order actions ─── */
+export const deleteOrder = (orderId: string) =>
+  api.delete<void>(`/orders/${orderId}`, { tokenSlot: 'admin' });
+export const setOrderArchived = (orderId: string, archived: boolean) =>
+  api.patch<OrderDTO>(`/orders/${orderId}/archive`, { archived }, { tokenSlot: 'admin' });
+
+/* ─── Chat attachment uploads ─── */
+async function uploadChatFile(path: string, file: File, orderId?: string): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
   if (orderId) fd.append('order_id', orderId);
   const token = tokenStore.get('admin') || tokenStore.get('customer');
-  const res = await fetch(`${(import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')}/uploads/audio`, {
+  const res = await fetch(`${(import.meta.env.VITE_API_URL || 'http://localhost:8000').replace(/\/$/, '')}${path}`, {
     method: 'POST',
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: fd,
@@ -148,9 +154,23 @@ export async function uploadAudio(file: File, orderId?: string): Promise<string>
   }
   return ((await res.json()) as { url: string }).url;
 }
+/** Recorded audio → server transcodes to MP3, returns its URL. Guests pass the order UUID. */
+export const uploadAudio = (file: File, orderId?: string) => uploadChatFile('/uploads/audio', file, orderId);
+/** Photo / screenshot attached in chat → returns its URL. Guests pass the order UUID. */
+export const uploadChatImage = (file: File, orderId?: string) => uploadChatFile('/uploads/chat-image', file, orderId);
 
-/* ─── Public runtime config (WhatsApp number, etc.) ─── */
-export const fetchPublicConfig = () => api.get<{ whatsapp_phone: string }>('/config');
+/* ─── Public runtime config (WhatsApp / call numbers, etc.) ─── */
+export const fetchPublicConfig = () => api.get<{ whatsapp_phone: string; call_phone: string }>('/config');
+
+/* ─── Admin: contact settings (owner-editable numbers) ─── */
+export interface ContactSettings {
+  whatsapp_phone: string;
+  call_phone: string;
+}
+export const getContactSettings = () =>
+  api.get<ContactSettings>('/admin/settings/contact', { tokenSlot: 'admin' });
+export const updateContactSettings = (input: ContactSettings) =>
+  api.put<ContactSettings>('/admin/settings/contact', input, { tokenSlot: 'admin' });
 
 /* ─── Image upload ─── */
 export async function uploadImage(file: File, kind: 'product' | 'color' = 'product'): Promise<string> {

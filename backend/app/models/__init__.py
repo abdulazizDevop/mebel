@@ -4,8 +4,10 @@ from app.models.product import Product, ColorVariant
 from app.models.order import Order, OrderItem, ChatMessage, OrderStatus, ChatSender
 from app.models.analytics import AnalyticsEvent, AnalyticsType
 from app.models.push import PushToken, PushPlatform
+from app.models.setting import Setting
 
 __all__ = [
+    "Setting",
     "User",
     "Customer",
     "UserRole",

@@ -79,6 +79,7 @@ export function dtoToChatMessage(m: ChatMessageDTO): ChatMessage {
     text: m.text,
     audioUrl: m.audio_url ?? undefined,
     audioDuration: m.audio_duration ?? undefined,
+    imageUrl: m.image_url ?? undefined,
     time: new Date(m.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
     timestamp: ts,
   };
@@ -113,6 +114,7 @@ export function dtoToOrder(d: OrderDTO): Order {
       colorIndex: 0, // synthetic — only one variant survives the snapshot
     })),
     chat: d.chat.map(dtoToChatMessage),
+    archived: d.archived,
     createdAt: created.toLocaleDateString('ru-RU'),
     createdTimestamp: created.getTime(),
   };

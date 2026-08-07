@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { LiquidButton } from '../components/LiquidButton';
+import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
+import { productWhatsappMessage } from '../utils/whatsapp';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
 
@@ -34,7 +35,7 @@ function getStyle(pos: string, mobile: boolean) {
 }
 
 export function Home() {
-  const { allProducts } = useStore();
+  const { allProducts, addToCart, whatsappPhone, callPhone } = useStore();
   // Pull the carousel from the live, API-backed catalog so the home page
   // reflects whatever the admin has uploaded — not the static seed file.
   const carouselItems = useMemo(() => allProducts.slice(0, 8), [allProducts]);
@@ -251,7 +252,7 @@ export function Home() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
           >
-            <h3 className="text-xl md:text-3xl font-bold mb-1 relative inline-block px-8">
+            <h3 className="font-serif text-xl md:text-3xl font-bold mb-1 relative inline-block px-8">
               <span className="absolute top-1/2 left-0 md:-left-10 w-6 md:w-16 h-[2px] bg-primary/20 -translate-y-1/2" />
               {active.name}
               <span className="absolute top-1/2 right-0 md:-right-10 w-6 md:w-16 h-[2px] bg-primary/20 -translate-y-1/2" />
@@ -282,17 +283,31 @@ export function Home() {
         ))}
       </div>
 
-      {/* CTA */}
+      {/* CTA — order / WhatsApp / call for the active carousel product */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.3 }}
-        className="flex justify-center"
+        className="flex flex-col items-center gap-2.5 w-full max-w-md mx-auto"
       >
-        <Link to={`/product/${active.id}`}>
-          <LiquidButton width={260} height={56}>
-            Подробнее
-          </LiquidButton>
+        <button
+          onClick={() => addToCart(active)}
+          className="w-full bg-primary text-primary-inv rounded-full py-4 font-bold hover:scale-[1.02] active:scale-[0.98] transition-all shadow-md"
+        >
+          Оформить заказ
+        </button>
+        {whatsappPhone && (
+          <WhatsAppButton
+            phone={whatsappPhone}
+            variant="outline"
+            label="Написать в WhatsApp"
+            message={productWhatsappMessage(active.name, active.price)}
+            className="w-full py-3.5 shadow-sm"
+          />
+        )}
+        {callPhone && <CallLink phone={callPhone} />}
+        <Link to={`/product/${active.id}`} className="text-sm font-bold opacity-50 hover:opacity-100 transition-opacity mt-1">
+          Подробнее →
         </Link>
       </motion.div>
     </div>

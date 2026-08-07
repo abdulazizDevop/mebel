@@ -5,9 +5,11 @@ import { useStore } from '../store/useStore';
 import { cn } from '../utils/cn';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
 import { useNavigate } from 'react-router-dom';
+import { WhatsAppButton } from './WhatsAppButton';
+import { cartWhatsappMessage } from '../utils/whatsapp';
 
 export function CartSidebar() {
-  const { cart, cartOpen, setCartOpen, removeFromCart, addToCart, placeOrder, setActiveOrderId, userSession } = useStore();
+  const { cart, cartOpen, setCartOpen, removeFromCart, addToCart, placeOrder, setActiveOrderId, userSession, whatsappPhone } = useStore();
   const navigate = useNavigate();
   const [step, setStep] = useState<'cart' | 'form' | 'done'>('cart');
   const [name, setName] = useState(userSession?.name || '');
@@ -279,6 +281,18 @@ export function CartSidebar() {
                 >
                   Оформить заказ
                 </button>
+                {whatsappPhone && (
+                  <WhatsAppButton
+                    phone={whatsappPhone}
+                    variant="outline"
+                    label="Написать в WhatsApp"
+                    message={cartWhatsappMessage(
+                      cart.map((i) => ({ name: i.product.name, price: i.product.price, qty: i.qty })),
+                      total,
+                    )}
+                    className="w-full py-3 mt-2"
+                  />
+                )}
               </div>
             )}
 

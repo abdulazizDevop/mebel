@@ -37,6 +37,7 @@ class ChatMessageOut(BaseModel):
     text: str
     audio_url: str | None = None
     audio_duration: int | None = None
+    image_url: str | None = None
     created_at: datetime
 
 
@@ -46,15 +47,18 @@ class ChatMessageIn(BaseModel):
     text: str = Field(default="", max_length=5000)
     audio_url: str | None = Field(default=None, max_length=2000)
     audio_duration: int | None = Field(default=None, ge=0, le=3600)
+    image_url: str | None = Field(default=None, max_length=2000)
 
     @model_validator(mode="after")
     def _require_content(self) -> "ChatMessageIn":
-        # Only accept an audio_url the server itself minted (via /uploads/audio),
-        # never an arbitrary external URL a client could set as a "voice message".
+        # Only accept URLs the server itself minted (via /uploads/*), never an
+        # arbitrary external URL a client could set as an attachment.
         if self.audio_url is not None and not is_own_storage_url(self.audio_url):
             raise ValueError("audio_url must reference this server's storage")
-        if not self.text.strip() and not self.audio_url:
-            raise ValueError("message must have text or audio_url")
+        if self.image_url is not None and not is_own_storage_url(self.image_url):
+            raise ValueError("image_url must reference this server's storage")
+        if not self.text.strip() and not self.audio_url and not self.image_url:
+            raise ValueError("message must have text, audio_url or image_url")
         return self
 
 
@@ -74,6 +78,10 @@ class OrderStatusUpdate(BaseModel):
     status: OrderStatus
 
 
+class OrderArchiveUpdate(BaseModel):
+    archived: bool
+
+
 class OrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -83,6 +91,7 @@ class OrderOut(BaseModel):
     customer_phone: str
     total: float
     status: OrderStatus
+    archived: bool = False
     items: list[OrderItemOut]
     chat: list[ChatMessageOut]
     created_at: datetime

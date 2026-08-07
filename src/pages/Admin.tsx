@@ -6,15 +6,17 @@ import {
   Edit3, X, Save, Check, Settings, Upload, Camera,
   Pipette, BarChart3, Users, ShoppingCart, Heart, Eye, Calendar,
   Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound,
-  Crown
+  Crown, Phone, ImagePlus, Archive, ArchiveRestore
 } from 'lucide-react';
-import { useStore, Order, RecommendationCategory, ALL_SECTIONS, SectionName } from '../store/useStore';
+import { useStore, Order, RecommendationCategory, ALL_SECTIONS } from '../store/useStore';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
 import { ImageCropModal } from '../components/ImageCropModal';
 import {
   createAdminUser as apiCreateAdminUser,
   deleteAdminUser as apiDeleteAdminUser,
+  getContactSettings,
+  updateContactSettings,
   dtoToChatMessage,
   dtoToProduct,
   fetchStats,
@@ -23,6 +25,7 @@ import {
   socketMessageToDto,
   updateAdminUser as apiUpdateAdminUser,
   uploadAudio,
+  uploadChatImage,
   uploadImage,
   useOrderChatSocket,
 } from '../api';
@@ -66,11 +69,27 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
     setUploadingVoice(true);
     try {
       const url = await uploadAudio(file, order.id);
-      if (!chatSocket.send('', url, durationSec)) {
-        await sendMessage(order.id, 'admin', '', url, durationSec);
+      const attachment = { audioUrl: url, audioDuration: durationSec };
+      if (!chatSocket.send('', attachment)) {
+        await sendMessage(order.id, 'admin', '', attachment);
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Не удалось отправить голосовое сообщение');
+    } finally {
+      setUploadingVoice(false);
+    }
+  };
+
+  const handleImage = async (file: File) => {
+    setUploadingVoice(true);
+    try {
+      const url = await uploadChatImage(file, order.id);
+      const attachment = { imageUrl: url };
+      if (!chatSocket.send('', attachment)) {
+        await sendMessage(order.id, 'admin', '', attachment);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Не удалось отправить изображение');
     } finally {
       setUploadingVoice(false);
     }
@@ -109,6 +128,11 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
               )}>
                 {isAdmin ? 'Вы (админ)' : order.name}
               </p>
+              {msg.imageUrl && (
+                <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
+                  <img src={msg.imageUrl} alt="Вложение" loading="lazy" className="rounded-xl max-h-56 w-auto object-cover" />
+                </a>
+              )}
               {msg.audioUrl && <AudioMessage src={msg.audioUrl} dark={isAdmin} />}
               {msg.text && <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>}
               <p className={cn(
@@ -133,13 +157,27 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
               placeholder="Ответить клиенту..."
               className="flex-1 min-w-0 bg-background rounded-full px-5 py-3 border-none shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm"
             />
-            {text.trim() && (
+            {text.trim() ? (
               <button
                 onClick={handleSend}
                 className="w-12 h-12 rounded-full flex items-center justify-center transition-all flex-shrink-0 bg-primary text-primary-inv hover:scale-105 active:scale-95"
               >
                 <Send size={18} />
               </button>
+            ) : (
+              <label className="w-12 h-12 rounded-full flex items-center justify-center bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 transition-all flex-shrink-0 cursor-pointer">
+                <ImagePlus size={18} />
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    e.target.value = '';
+                    if (f) handleImage(f);
+                  }}
+                />
+              </label>
             )}
           </>
         )}
@@ -149,6 +187,94 @@ function AdminChat({ order, onBack }: { order: Order; onBack: () => void }) {
           uploading={uploadingVoice}
         />
       </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   ContactSettingsCard — owner-editable WhatsApp / call numbers
+   ═══════════════════════════════════════════════════ */
+function ContactSettingsCard() {
+  const { refreshConfig } = useStore();
+  const [whatsapp, setWhatsapp] = useState('');
+  const [call, setCall] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getContactSettings()
+      .then((c) => {
+        setWhatsapp(c.whatsapp_phone || '');
+        setCall(c.call_phone || '');
+      })
+      .catch(() => setError('Не удалось загрузить настройки'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      // The backend strips everything but digits, so pasting "wa.me/…" or
+      // "+7 (928) …" is fine.
+      const c = await updateContactSettings({ whatsapp_phone: whatsapp, call_phone: call });
+      setWhatsapp(c.whatsapp_phone);
+      setCall(c.call_phone);
+      await refreshConfig();
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Не удалось сохранить');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    'w-full bg-background rounded-2xl px-5 py-3 border border-primary/5 focus:ring-2 focus:ring-primary outline-none text-sm';
+
+  return (
+    <div className="bg-surface rounded-3xl shadow-sm p-6 mb-4">
+      <div className="flex items-center gap-2 mb-1">
+        <MessageCircle size={18} className="opacity-40" />
+        <h3 className="font-bold">Контакты (WhatsApp / звонок)</h3>
+      </div>
+      <p className="text-xs opacity-50 mb-4">
+        Номера для кнопок на сайте. Можно вставлять в любом виде — сохранятся только цифры.
+      </p>
+      {loading ? (
+        <p className="text-sm opacity-40">Загрузка…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-bold opacity-50 mb-1 block px-1 flex items-center gap-1">
+                <MessageCircle size={12} className="text-green-600" /> WhatsApp
+              </label>
+              <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} placeholder="79285199424" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs font-bold opacity-50 mb-1 block px-1 flex items-center gap-1">
+                <Phone size={12} className="opacity-60" /> Телефон для звонка
+              </label>
+              <input value={call} onChange={(e) => setCall(e.target.value)} placeholder="79280484048" className={inputCls} />
+            </div>
+          </div>
+          {error && <p className="text-xs text-red-500 px-1">{error}</p>}
+          <button
+            onClick={save}
+            disabled={saving}
+            className={cn(
+              'w-full rounded-full py-3 font-bold text-sm flex items-center justify-center gap-2 transition-all',
+              saved ? 'bg-green-600 text-white' : 'bg-primary text-primary-inv hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:scale-100',
+            )}
+          >
+            {saved ? <><Check size={16} /> Сохранено!</> : <><Save size={16} /> {saving ? 'Сохранение…' : 'Сохранить номера'}</>}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -675,7 +801,7 @@ function Dashboard() {
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
   const [statsRaw, setStatsRaw] = useState<StatsDTO | null>(null);
-  const [statsLoading, setStatsLoading] = useState(false);
+  const [, setStatsLoading] = useState(false);
 
   // Refetch stats whenever the period or the custom range is fully filled.
   useEffect(() => {
@@ -1436,15 +1562,16 @@ function RecommendationsManager() {
 export function Admin() {
   const navigate = useNavigate();
   const {
-    orders, allProducts, addProduct, removeProduct, updateProduct,
-    adminCredentials, updateAdminCredentials,
+    orders, deleteOrder, archiveOrder, allProducts, addProduct, removeProduct, updateProduct,
+    updateAdminCredentials,
     notifications, markNotificationRead, unreadCount,
-    recommendations, addRecommendation, updateRecommendation, removeRecommendation,
+    recommendations,
     allCategories: storeCats, addCategory, removeCategory, customCategories,
     adminSession, logoutAdmin,
   } = useStore();
 
   const [selectedOrder, setSelectedOrder] = useState<string | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -1630,6 +1757,7 @@ export function Admin() {
             transition={{ duration: 0.2 }}
             className="overflow-hidden mb-6"
           >
+            <ContactSettingsCard />
             <div className="bg-surface rounded-3xl shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
                 <KeyRound size={18} className="opacity-40" />
@@ -1708,39 +1836,73 @@ export function Admin() {
             </motion.div>
           ) : (
             <motion.div key="order-list" initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 20 }}>
-              {orders.length === 0 ? (
-                <div className="bg-surface rounded-3xl shadow-sm p-12 text-center">
-                  <Package size={40} className="mx-auto opacity-15 mb-4" />
-                  <p className="opacity-40">Заказов пока нет</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {orders.map((order) => (
-                    <motion.button
-                      key={order.id}
-                      onClick={() => setSelectedOrder(order.id)}
-                      className="w-full bg-surface rounded-2xl shadow-sm p-5 flex items-center gap-4 text-left hover:shadow-md transition-shadow"
-                      whileHover={{ scale: 1.01 }}
-                      whileTap={{ scale: 0.99 }}
-                    >
-                      <div className="bg-primary/5 rounded-full p-3">
-                        <MessageCircle size={20} />
+              {(() => {
+                const archivedCount = orders.filter((o) => o.archived).length;
+                const visibleOrders = orders.filter((o) => (showArchived ? o.archived : !o.archived));
+                return (
+                  <>
+                    <div className="flex items-center gap-2 mb-3">
+                      <button
+                        onClick={() => setShowArchived(false)}
+                        className={cn('px-4 py-2 rounded-full text-xs font-bold transition-all', !showArchived ? 'bg-primary text-primary-inv' : 'bg-surface hover:bg-primary/5')}
+                      >
+                        Активные
+                      </button>
+                      <button
+                        onClick={() => setShowArchived(true)}
+                        className={cn('px-4 py-2 rounded-full text-xs font-bold transition-all flex items-center gap-1.5', showArchived ? 'bg-primary text-primary-inv' : 'bg-surface hover:bg-primary/5')}
+                      >
+                        <Archive size={13} /> Архив{archivedCount > 0 ? ` (${archivedCount})` : ''}
+                      </button>
+                    </div>
+                    {visibleOrders.length === 0 ? (
+                      <div className="bg-surface rounded-3xl shadow-sm p-12 text-center">
+                        <Package size={40} className="mx-auto opacity-15 mb-4" />
+                        <p className="opacity-40">{showArchived ? 'Архив пуст' : 'Заказов пока нет'}</p>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <h4 className="font-bold text-sm">{order.name}</h4>
-                          <span className="text-xs opacity-40">{order.createdAt}</span>
-                        </div>
-                        <p className="text-xs opacity-50 truncate">{order.phone}</p>
-                        <div className="flex items-center justify-between mt-1">
-                          <span className="text-xs opacity-40">{order.items.length} товаров — {order.total} ₽</span>
-                          <span className="bg-terracotta/10 text-terracotta text-[10px] font-bold px-2 py-0.5 rounded-full">{order.chat.length} сообщ.</span>
-                        </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {visibleOrders.map((order) => (
+                          <div key={order.id} className="w-full bg-surface rounded-2xl shadow-sm p-5 flex items-center gap-3 hover:shadow-md transition-shadow">
+                            <button onClick={() => setSelectedOrder(order.id)} className="flex items-center gap-4 flex-1 min-w-0 text-left">
+                              <div className="bg-primary/5 rounded-full p-3 flex-shrink-0">
+                                <MessageCircle size={20} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <h4 className="font-bold text-sm truncate">{order.name}</h4>
+                                  <span className="text-xs opacity-40 flex-shrink-0">{order.createdAt}</span>
+                                </div>
+                                <p className="text-xs opacity-50 truncate">{order.phone}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs opacity-40">{order.items.length} товаров — {order.total} ₽</span>
+                                  <span className="bg-terracotta/10 text-terracotta text-[10px] font-bold px-2 py-0.5 rounded-full">{order.chat.length} сообщ.</span>
+                                </div>
+                              </div>
+                            </button>
+                            <div className="flex flex-col gap-1.5 flex-shrink-0">
+                              <button
+                                onClick={() => archiveOrder(order.id, !order.archived)}
+                                title={order.archived ? 'Восстановить' : 'В архив'}
+                                className="w-9 h-9 rounded-full flex items-center justify-center bg-primary/5 hover:bg-primary/10 transition-colors"
+                              >
+                                {order.archived ? <ArchiveRestore size={15} /> : <Archive size={15} />}
+                              </button>
+                              <button
+                                onClick={() => { if (window.confirm('Удалить этот чат навсегда?')) deleteOrder(order.id); }}
+                                title="Удалить"
+                                className="w-9 h-9 rounded-full flex items-center justify-center bg-red-500/10 text-red-500 hover:bg-red-500/20 transition-colors"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </motion.button>
-                  ))}
-                </div>
-              )}
+                    )}
+                  </>
+                );
+              })()}
             </motion.div>
           )
         )}

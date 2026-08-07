@@ -1,24 +1,23 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check, X, Pipette } from 'lucide-react';
+import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { useStore } from '../store/useStore';
 import { LiquidButton } from '../components/LiquidButton';
-import { WhatsAppButton } from '../components/WhatsAppButton';
+import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
+import { productWhatsappMessage } from '../utils/whatsapp';
 import { dtoToProduct, getProduct as apiGetProduct } from '../api';
 import type { Product } from '../data/products';
 
 export function ProductDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { allProducts: products, addToCart, toggleFavorite, isFavorite: isFav, trackEvent, whatsappPhone } = useStore();
+  const { allProducts: products, addToCart, toggleFavorite, isFavorite: isFav, trackEvent, whatsappPhone, callPhone } = useStore();
   const [showOrderToast, setShowOrderToast] = useState(false);
   const [activeColor, setActiveColor] = useState(0);
   const [activeThumb, setActiveThumb] = useState(0);
   const [expanded, setExpanded] = useState(false);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
-  const [pickedColor, setPickedColor] = useState<string | null>(null);
 
   // The catalog list ships a slim version of every product (no per-colour
   // photos[]) to keep payloads tiny. On the detail page we need the full
@@ -74,16 +73,6 @@ export function ProductDetail() {
   const handleColorChange = (index: number) => {
     setActiveColor(index);
     setActiveThumb(0);
-  };
-
-  const handleEyedropper = async () => {
-    try {
-      if ('EyeDropper' in window) {
-        const dropper = new (window as any).EyeDropper();
-        const result = await dropper.open();
-        setPickedColor(result.sRGBHex);
-      }
-    } catch { /* user cancelled */ }
   };
 
   return (
@@ -227,7 +216,7 @@ export function ProductDetail() {
       >
         {/* Name */}
         <div className="mb-4">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight">
+          <h2 className="font-serif text-2xl md:text-3xl font-bold tracking-tight leading-tight">
             {product.name}
           </h2>
         </div>
@@ -295,23 +284,31 @@ export function ProductDetail() {
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="fixed bottom-28 left-4 right-4 sm:left-auto sm:right-6 z-40 flex justify-center sm:justify-end items-center gap-3"
+        className="fixed bottom-28 left-4 right-4 sm:left-auto sm:right-6 z-40 flex flex-col items-stretch sm:items-end gap-2"
       >
+        <div className="flex justify-center sm:justify-end">
+          <LiquidButton onClick={handleOrder} width={220} height={52}>
+            <span className="flex items-center gap-2">
+              <ShoppingBag size={16} />
+              В корзину · {product.price.toLocaleString('ru-RU')} ₽
+            </span>
+          </LiquidButton>
+        </div>
         {whatsappPhone && (
           <WhatsAppButton
             phone={whatsappPhone}
-            variant="icon"
-            label="Заказать в WhatsApp"
-            message={`Здравствуйте! Хотел бы заказать этот товар: ${product.name}\n${window.location.href}`}
-            className="w-[52px] h-[52px] shadow-lg"
+            variant="outline"
+            label="Написать в WhatsApp"
+            message={productWhatsappMessage(product.name, product.price)}
+            className="w-full sm:w-[220px] py-3 shadow-lg"
           />
         )}
-        <LiquidButton onClick={handleOrder} width={200} height={52}>
-          <span className="flex items-center gap-2">
-            <ShoppingBag size={16} />
-            В корзину · {product.price.toLocaleString('ru-RU')} ₽
-          </span>
-        </LiquidButton>
+        {callPhone && (
+          <CallLink
+            phone={callPhone}
+            className="bg-surface/90 backdrop-blur-sm rounded-full py-2 px-4 shadow-lg self-center sm:self-end"
+          />
+        )}
       </motion.div>
     </div>
   );

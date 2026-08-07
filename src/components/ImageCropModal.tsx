@@ -137,13 +137,23 @@ export function ImageCropModal({ file, onConfirm, onCancel }: Props) {
       const sw = completedCrop.width * scaleX;
       const sh = completedCrop.height * scaleY;
 
+      // Downscale so the longest edge is at most MAX_EDGE px. Cameras/phones
+      // produce multi-megapixel photos; storing them full-res makes the catalog
+      // load & scroll slowly (and bloats S3). 1600px is plenty sharp for the
+      // product hero and keeps files small.
+      const MAX_EDGE = 1600;
+      const longEdge = Math.max(sw, sh);
+      const outScale = longEdge > MAX_EDGE ? MAX_EDGE / longEdge : 1;
+      const outW = Math.max(1, Math.round(sw * outScale));
+      const outH = Math.max(1, Math.round(sh * outScale));
+
       const canvas = document.createElement('canvas');
-      canvas.width = Math.round(sw);
-      canvas.height = Math.round(sh);
+      canvas.width = outW;
+      canvas.height = outH;
       const ctx = canvas.getContext('2d');
       if (!ctx) throw new Error('Canvas not supported');
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outW, outH);
 
       const blob: Blob = await new Promise((resolve, reject) =>
         canvas.toBlob(

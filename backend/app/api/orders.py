@@ -19,6 +19,7 @@ from app.models import (
 from app.schemas.order import (
     ChatMessageIn,
     ChatMessageOut,
+    OrderArchiveUpdate,
     OrderCreateIn,
     OrderOut,
     OrderStatusUpdate,
@@ -45,12 +46,17 @@ def _chat_payload(msg: ChatMessage) -> dict:
         "text": msg.text,
         "audio_url": msg.audio_url,
         "audio_duration": msg.audio_duration,
+        "image_url": msg.image_url,
         "created_at": msg.created_at.isoformat(),
     }
 
 
 def _push_body(msg: ChatMessage) -> str:
-    return msg.text[:140] if msg.text else "🎤 Голосовое сообщение"
+    if msg.text:
+        return msg.text[:140]
+    if msg.image_url:
+        return "📷 Фото"
+    return "🎤 Голосовое сообщение"
 
 
 def _load_order(db: Session, order_id: str) -> Order:
@@ -214,6 +220,37 @@ def update_status(
     return order
 
 
+@router.patch(
+    "/{order_id}/archive",
+    response_model=OrderOut,
+    dependencies=[Depends(require_section("orders"))],
+)
+def set_archived(
+    order_id: str,
+    payload: OrderArchiveUpdate,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Move a chat to the archive (or restore it) without deleting."""
+    order = _load_order(db, order_id)
+    order.archived = payload.archived
+    db.commit()
+    db.refresh(order)
+    return order
+
+
+@router.delete(
+    "/{order_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_section("orders"))],
+)
+def delete_order(order_id: str, db: Annotated[Session, Depends(get_db)]):
+    """Permanently delete a chat/order (cascades to its items + messages)."""
+    order = _load_order(db, order_id)
+    db.delete(order)
+    db.commit()
+    return None
+
+
 # ─── Chat (basic REST; WebSocket for real-time lands in 2C) ────────────
 
 
@@ -238,6 +275,7 @@ def send_chat_as_admin(
         text=payload.text.strip(),
         audio_url=payload.audio_url,
         audio_duration=payload.audio_duration,
+        image_url=payload.image_url,
     )
     db.add(msg)
     # Guarded new→chatting bump (see ws_chat.py) so a concurrent terminal-status
@@ -294,6 +332,7 @@ def send_chat_as_customer(
         text=payload.text.strip(),
         audio_url=payload.audio_url,
         audio_duration=payload.audio_duration,
+        image_url=payload.image_url,
     )
     db.add(msg)
     db.commit()
@@ -359,6 +398,7 @@ def send_chat_as_guest(
         text=payload.text.strip(),
         audio_url=payload.audio_url,
         audio_duration=payload.audio_duration,
+        image_url=payload.image_url,
     )
     db.add(msg)
     db.commit()

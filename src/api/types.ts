@@ -105,6 +105,7 @@ export interface ChatMessageDTO {
   text: string;
   audio_url: string | null;
   audio_duration: number | null;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -115,6 +116,7 @@ export interface OrderDTO {
   customer_phone: string;
   total: number;
   status: OrderStatus;
+  archived: boolean;
   items: OrderItemDTO[];
   chat: ChatMessageDTO[];
   created_at: string;

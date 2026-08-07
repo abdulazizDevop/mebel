@@ -3,7 +3,10 @@ import { Product, products as defaultProducts } from '../data/products';
 import {
   ApiError,
   CategoryDTO,
+  ChatAttachment,
   adminListOrders as apiAdminListOrders,
+  deleteOrder as apiDeleteOrder,
+  setOrderArchived as apiSetOrderArchived,
   changeAdminPassword as apiChangeAdminPassword,
   createCategory as apiCreateCategory,
   createProduct as apiCreateProduct,
@@ -64,6 +67,8 @@ export interface ChatMessage {
   /** Voice message: URL of the transcoded MP3, and its length in seconds. */
   audioUrl?: string;
   audioDuration?: number;
+  /** Image attachment (photo / screenshot) URL. */
+  imageUrl?: string;
   time: string;
   timestamp: number;
 }
@@ -75,6 +80,7 @@ export interface Order {
   items: CartItem[];
   total: number;
   chat: ChatMessage[];
+  archived: boolean;
   createdAt: string;
   createdTimestamp: number;
 }
@@ -181,11 +187,15 @@ interface StoreContextType {
   ) => Promise<string | null>;
   activeOrderId: string | null;
   setActiveOrderId: (id: string | null) => void;
-  sendMessage: (orderId: string, from: 'client' | 'admin', text: string, audioUrl?: string, audioDuration?: number) => Promise<void>;
+  sendMessage: (orderId: string, from: 'client' | 'admin', text: string, attachment?: ChatAttachment) => Promise<void>;
   /** Insert a chat message into a known order's `chat` list, deduped by id.
    *  Used by the live WebSocket subscriber to land server-broadcast messages. */
   appendChatMessage: (orderId: string, msg: ChatMessage) => void;
   refreshOrders: () => Promise<void>;
+  /** Admin: permanently delete an order + its chat. */
+  deleteOrder: (orderId: string) => Promise<void>;
+  /** Admin: archive (hide from active list) or restore an order. */
+  archiveOrder: (orderId: string, archived: boolean) => Promise<void>;
 
   // Products
   allProducts: Product[];
@@ -238,6 +248,10 @@ interface StoreContextType {
 
   /** WhatsApp number (digits only) for the "order via WhatsApp" button. Empty = hidden. */
   whatsappPhone: string;
+  /** Phone number (digits only) for the "позвонить" tel: button. Empty = hidden. */
+  callPhone: string;
+  /** Re-fetch the contact numbers from /config (after admin edits them). */
+  refreshConfig: () => Promise<void>;
 
   // Admin session (global)
   adminSession: { name: string; role: 'admin' | 'manager' | 'viewer'; sections: string[] } | null;
@@ -354,13 +368,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(
+  const [registeredUsers] = useState<RegisteredUser[]>(
     () => dbGet(DB_KEYS.registeredUsers, [])
   );
 
-  // WhatsApp number for the "order via WhatsApp" deep-link, served by the
-  // backend /config so the owner can change it without a frontend rebuild.
+  // WhatsApp + call numbers for the deep-link / tel buttons, served by the
+  // backend /config so the owner can change them without a frontend rebuild.
   const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [callPhone, setCallPhone] = useState('');
 
   // Persist to localStorage
   useEffect(() => { dbSet(DB_KEYS.orders, orders); }, [orders]);
@@ -410,6 +425,18 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  // Pull the owner-editable contact numbers. Called on mount and again after
+  // the admin saves new numbers in Settings, so the storefront updates live.
+  const refreshConfig = useCallback(async () => {
+    try {
+      const c = await fetchPublicConfig();
+      setWhatsappPhone(c.whatsapp_phone || '');
+      setCallPhone(c.call_phone || '');
+    } catch {
+      /* keep whatever we had */
+    }
+  }, []);
+
   // Load products + categories from the API on mount. The localStorage
   // cache above provides the initial render; this call refreshes it.
   useEffect(() => {
@@ -422,9 +449,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     apiListCategories()
       .then(setCategoriesData)
       .catch(() => {});
-    fetchPublicConfig()
-      .then((c) => setWhatsappPhone(c.whatsapp_phone || ''))
-      .catch(() => {});
+    refreshConfig();
     refreshOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -542,12 +567,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const deleteOrder = async (orderId: string): Promise<void> => {
+    try {
+      await apiDeleteOrder(orderId);
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      setActiveOrderId((cur) => (cur === orderId ? null : cur));
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Не удалось удалить чат');
+    }
+  };
+
+  const archiveOrder = async (orderId: string, archived: boolean): Promise<void> => {
+    try {
+      const dto = await apiSetOrderArchived(orderId, archived);
+      const updated = dtoToOrder(dto);
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : 'Не удалось изменить');
+    }
+  };
+
   const sendMessage = async (
     orderId: string,
     from: 'client' | 'admin',
     text: string,
-    audioUrl?: string,
-    audioDuration?: number,
+    attachment?: ChatAttachment,
   ): Promise<void> => {
     try {
       // Admins use the authed admin endpoint. Customers who are logged in use
@@ -559,7 +603,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           : tokenStore.get('customer')
             ? apiSendChatAsCustomer
             : apiSendChatAsGuest;
-      const msgDto = await sender(orderId, text, audioUrl, audioDuration);
+      const msgDto = await sender(orderId, text, attachment);
       const created = new Date(msgDto.created_at);
       const msg: ChatMessage = {
         id: msgDto.id,
@@ -567,6 +611,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         text: msgDto.text,
         audioUrl: msgDto.audio_url ?? undefined,
         audioDuration: msgDto.audio_duration ?? undefined,
+        imageUrl: msgDto.image_url ?? undefined,
         time: created.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
         timestamp: created.getTime(),
       };
@@ -815,7 +860,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return (
     <StoreContext.Provider value={{
       cart, addToCart, removeFromCart, clearCart, cartOpen, setCartOpen,
-      orders, placeOrder, placeCustomOrder, activeOrderId, setActiveOrderId, sendMessage, appendChatMessage, refreshOrders,
+      orders, placeOrder, placeCustomOrder, activeOrderId, setActiveOrderId, sendMessage, appendChatMessage, refreshOrders, deleteOrder, archiveOrder,
       allProducts, addProduct, removeProduct, updateProduct,
       adminCredentials, registerAdmin, loginAdmin, updateAdminCredentials,
       users, addUser, updateUser, removeUser,
@@ -824,7 +869,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       notifications, addNotification, markNotificationRead, unreadCount,
       recommendations, addRecommendation, updateRecommendation, removeRecommendation,
       customCategories: apiCategoryNames, addCategory, removeCategory, allCategories: allCategoriesList,
-      whatsappPhone,
+      whatsappPhone, callPhone, refreshConfig,
       adminSession, setAdminSession, logoutAdmin,
       userSession, setUserSession, logoutUser, registeredUsers, registerUser, loginUser,
     }}>

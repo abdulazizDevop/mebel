@@ -17,6 +17,7 @@ export interface ChatSocketMessage {
   text: string;
   audio_url: string | null;
   audio_duration: number | null;
+  image_url: string | null;
   created_at: string;
 }
 
@@ -31,8 +32,14 @@ function wsUrl(orderId: string, token: string | null): string {
 
 export type ChatSlot = 'admin' | 'customer' | 'guest';
 
+export interface ChatAttachment {
+  audioUrl?: string;
+  audioDuration?: number;
+  imageUrl?: string;
+}
+
 export interface OrderChatSocket {
-  send: (text: string, audioUrl?: string, audioDuration?: number) => boolean;
+  send: (text: string, attachment?: ChatAttachment) => boolean;
   /** True after the socket has reached OPEN. Useful for an "online" badge. */
   isOpen: boolean;
 }
@@ -120,16 +127,18 @@ export function useOrderChatSocket(
 
   return {
     isOpen,
-    send: (text: string, audioUrl?: string, audioDuration?: number) => {
+    send: (text: string, attachment?: ChatAttachment) => {
       const trimmed = text.trim();
       const ws = wsRef.current;
-      // Allow a caption-less voice message: send when there's text OR audio.
-      if (!ws || ws.readyState !== WebSocket.OPEN || (!trimmed && !audioUrl)) return false;
+      const hasAttachment = !!(attachment?.audioUrl || attachment?.imageUrl);
+      // Allow a caption-less attachment: send when there's text OR audio/image.
+      if (!ws || ws.readyState !== WebSocket.OPEN || (!trimmed && !hasAttachment)) return false;
       ws.send(
         JSON.stringify({
           text: trimmed,
-          audio_url: audioUrl ?? null,
-          audio_duration: audioDuration ?? null,
+          audio_url: attachment?.audioUrl ?? null,
+          audio_duration: attachment?.audioDuration ?? null,
+          image_url: attachment?.imageUrl ?? null,
         }),
       );
       return true;
@@ -148,6 +157,7 @@ export function socketMessageToDto(msg: ChatSocketMessage): ChatMessageDTO {
     text: msg.text,
     audio_url: msg.audio_url ?? null,
     audio_duration: msg.audio_duration ?? null,
+    image_url: msg.image_url ?? null,
     created_at: msg.created_at,
   };
 }
