@@ -9,3 +9,13 @@ build
 .env
 .env.local
 .orchids/
+
+# TypeScript compiler emit — the app sources are .ts/.tsx; these are generated
+# (e.g. by an accidental `tsc -b`) and must never be committed.
+*.tsbuildinfo
+/vite.config.js
+/vite.config.d.ts
+/src/data/products.js
+/src/data/products.d.ts
+/src/scripts/seed.js
+/src/scripts/seed.d.ts
