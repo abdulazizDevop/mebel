@@ -74,7 +74,10 @@ export const listProducts = (params?: {
   if (params?.category_id !== undefined) qs.set('category_id', String(params.category_id));
   if (params?.in_stock_only) qs.set('in_stock_only', 'true');
   if (params?.q) qs.set('q', params.q);
-  if (params?.limit !== undefined) qs.set('limit', String(params.limit));
+  // Default to a high limit so the whole catalog loads — the API caps at 60 by
+  // default, which made products past #60 look "deleted" (they were always in
+  // the DB). The storefront shows all products at once (no pagination UI).
+  qs.set('limit', String(params?.limit ?? 500));
   if (params?.offset !== undefined) qs.set('offset', String(params.offset));
   const q = qs.toString();
   return api.get<ProductDTO[]>(`/products${q ? `?${q}` : ''}`);

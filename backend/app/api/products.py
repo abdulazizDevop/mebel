@@ -52,7 +52,7 @@ def list_products(
     category_id: int | None = Query(default=None),
     in_stock_only: bool = Query(default=False),
     q: str | None = Query(default=None, description="Search by name/sku"),
-    limit: int = Query(default=60, ge=1, le=500),
+    limit: int = Query(default=500, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
 ):
     """List products WITHOUT per-color photo arrays.
