@@ -16,9 +16,7 @@ export default {
         mustard: "#D18D3D",
       },
       fontFamily: {
-        sans: ['Inter', 'Gilroy', 'sans-serif'],
-        // Premium serif for display headings / taglines.
-        serif: ['"Playfair Display"', 'Georgia', 'serif'],
+        sans: ['Onest', 'sans-serif'],
       },
       borderRadius: {
         'pill': '9999px',

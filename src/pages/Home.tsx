@@ -252,7 +252,7 @@ export function Home() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
           >
-            <h3 className="font-serif text-xl md:text-3xl font-bold mb-1 relative inline-block px-8">
+            <h3 className="text-xl md:text-3xl font-bold mb-1 relative inline-block px-8">
               <span className="absolute top-1/2 left-0 md:-left-10 w-6 md:w-16 h-[2px] bg-primary/20 -translate-y-1/2" />
               {active.name}
               <span className="absolute top-1/2 right-0 md:-right-10 w-6 md:w-16 h-[2px] bg-primary/20 -translate-y-1/2" />

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
-import { ShoppingBag, SlidersHorizontal, Filter, ArrowRight, Compass, Check, X, Ruler, MessageCircle, Send } from 'lucide-react';
+import { ShoppingBag, SlidersHorizontal, Filter, ArrowRight, Compass, Check, X, Ruler, MessageCircle, Send, Factory, Truck } from 'lucide-react';
 import { LiquidButton } from '../components/LiquidButton';
 import { useStore } from '../store/useStore';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
@@ -393,7 +393,7 @@ export function Catalog() {
       {/* "Рекомендуем для вас" — horizontal scroll section from reference */}
       <div className="mb-12">
         <div className="flex items-center justify-between mb-5">
-          <h3 className="font-serif text-2xl font-bold">Рекомендуем для вас</h3>
+          <h3 className="text-2xl font-bold">Рекомендуем для вас</h3>
           <Link to="#catalog-grid" className="flex items-center gap-1 opacity-50 hover:opacity-100 transition-opacity">
             <ArrowRight size={20} />
           </Link>
@@ -451,6 +451,22 @@ export function Catalog() {
               </Link>
             );
           })}
+        </div>
+      </div>
+
+      {/* Trust badges — own production + delivery across Russia */}
+      <div className="grid grid-cols-2 gap-3 mb-8">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-surface shadow-sm flex items-center justify-center flex-shrink-0">
+            <Factory size={20} className="opacity-70" />
+          </div>
+          <span className="text-sm font-semibold leading-tight">Собственное<br />производство</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-full bg-surface shadow-sm flex items-center justify-center flex-shrink-0">
+            <Truck size={20} className="opacity-70" />
+          </div>
+          <span className="text-sm font-semibold leading-tight">Доставка<br />по России</span>
         </div>
       </div>
 
@@ -579,7 +595,7 @@ export function Catalog() {
 
         {/* Active category title with falling letters */}
         <div className="h-10 flex items-center">
-          <h3 className="font-serif text-2xl font-bold tracking-tight">
+          <h3 className="text-2xl font-bold tracking-tight">
             <FallingTitle text={activeCategory} />
           </h3>
         </div>
