@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.deps import require_section
-from app.services.settings_store import get_contact_config, only_digits, set_setting
+from app.services.settings_store import get_contact_config, normalize_phone, set_setting
 
 router = APIRouter(
     prefix="/admin/settings",
@@ -40,6 +40,6 @@ def update_contact_settings(
     db: Annotated[Session, Depends(get_db)],
 ):
     # Store digits only — the frontend builds wa.me/<digits> and tel:+<digits>.
-    set_setting(db, "whatsapp_phone", only_digits(payload.whatsapp_phone))
-    set_setting(db, "call_phone", only_digits(payload.call_phone))
+    set_setting(db, "whatsapp_phone", normalize_phone(payload.whatsapp_phone))
+    set_setting(db, "call_phone", normalize_phone(payload.call_phone))
     return ContactSettingsOut(**get_contact_config(db))

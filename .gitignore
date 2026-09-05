@@ -10,6 +10,9 @@ build
 .env.local
 .orchids/
 
+# Client notes / specs dropped into the repo root while working — never source.
+/*.txt
+
 # TypeScript compiler emit — the app sources are .ts/.tsx; these are generated
 # (e.g. by an accidental `tsc -b`) and must never be committed.
 *.tsbuildinfo
