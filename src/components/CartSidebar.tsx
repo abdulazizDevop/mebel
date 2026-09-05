@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Minus, Plus, ShoppingBag, Send } from 'lucide-react';
+import { X, Minus, Plus, ShoppingBag } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { cn } from '../utils/cn';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
 import { useNavigate } from 'react-router-dom';
 import { WhatsAppButton } from './WhatsAppButton';
 import { cartWhatsappMessage } from '../utils/whatsapp';
+import { CONSENT_ERRORS, ConsentCheckbox, MarketingConsentText, TermsConsentText } from './ConsentCheckbox';
+import { OrderAccepted, type OrderAcceptedLine } from './OrderAccepted';
 
 export function CartSidebar() {
   const { cart, cartOpen, setCartOpen, removeFromCart, addToCart, placeOrder, setActiveOrderId, userSession, whatsappPhone } = useStore();
@@ -15,6 +17,14 @@ export function CartSidebar() {
   const [name, setName] = useState(userSession?.name || '');
   const [phone, setPhone] = useState('');
   const [orderId, setOrderId] = useState('');
+  // Snapshot of what was ordered — the cart is cleared once the order is placed.
+  const [acceptedLines, setAcceptedLines] = useState<OrderAcceptedLine[]>([]);
+  const [acceptedTotal, setAcceptedTotal] = useState(0);
+
+  // Legal checkboxes — always start unchecked (ТЗ §13/§14).
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [termsTouched, setTermsTouched] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
@@ -27,40 +37,51 @@ export function CartSidebar() {
 
   const total = cart.reduce((s, i) => s + i.product.price * i.qty, 0);
 
+  const resetForm = () => {
+    setStep('cart');
+    setName('');
+    setPhone('');
+    setTermsAccepted(false);
+    setMarketingConsent(false);
+    setTermsTouched(false);
+    setSubmitError('');
+  };
+
   const handlePlaceOrder = async () => {
     setNameTouched(true);
     setPhoneTouched(true);
+    setTermsTouched(true);
     if (!formValid) return;
+    if (!termsAccepted) {
+      setSubmitError(CONSENT_ERRORS.terms);
+      return;
+    }
     setSubmitting(true);
     setSubmitError('');
-    const id = await placeOrder(name.trim(), phone.trim());
+    const lines = cart.map((i) => ({ name: i.product.name, qty: i.qty, price: i.product.price }));
+    const snapshotTotal = total;
+    const id = await placeOrder(name.trim(), phone.trim(), { marketing: marketingConsent });
     setSubmitting(false);
     if (!id) {
       setSubmitError('Не удалось оформить заказ. Попробуйте ещё раз.');
       return;
     }
     setOrderId(id);
+    setAcceptedLines(lines);
+    setAcceptedTotal(snapshotTotal);
     setStep('done');
   };
 
   const handleClose = () => {
     setCartOpen(false);
-    setTimeout(() => {
-      setStep('cart');
-      setName('');
-      setPhone('');
-    }, 300);
+    setTimeout(resetForm, 300);
   };
 
   const handleGoToChat = () => {
     setCartOpen(false);
     setActiveOrderId(orderId);
     navigate('/chat');
-    setTimeout(() => {
-      setStep('cart');
-      setName('');
-      setPhone('');
-    }, 300);
+    setTimeout(resetForm, 300);
   };
 
   return (
@@ -91,10 +112,10 @@ export function CartSidebar() {
                 <h3 className="text-lg font-bold">
                   {step === 'cart' && 'Корзина'}
                   {step === 'form' && 'Оформление'}
-                  {step === 'done' && 'Готово!'}
+                  {step === 'done' && 'Заказ принят'}
                 </h3>
               </div>
-              <button onClick={handleClose} className="p-2 hover:bg-primary/5 rounded-full transition-colors">
+              <button onClick={handleClose} className="p-2 hover:bg-primary/5 rounded-full transition-colors" aria-label="Закрыть">
                 <X size={20} />
               </button>
             </div>
@@ -239,30 +260,43 @@ export function CartSidebar() {
                         <span>{total} ₽</span>
                       </div>
                     </div>
+
+                    {/* Legal consents — required terms box + optional marketing box, kept separate */}
+                    <div className="space-y-2">
+                      <ConsentCheckbox
+                        id="cart-terms"
+                        checked={termsAccepted}
+                        invalid={termsTouched && !termsAccepted}
+                        onChange={(v) => {
+                          setTermsAccepted(v);
+                          if (v && submitError === CONSENT_ERRORS.terms) setSubmitError('');
+                        }}
+                      >
+                        <TermsConsentText />
+                      </ConsentCheckbox>
+                      {termsTouched && !termsAccepted && (
+                        <p className="text-[11px] text-red-500 px-2">{CONSENT_ERRORS.terms}</p>
+                      )}
+                      <ConsentCheckbox id="cart-marketing" checked={marketingConsent} onChange={setMarketingConsent}>
+                        <MarketingConsentText />
+                      </ConsentCheckbox>
+                    </div>
                   </motion.div>
                 )}
 
                 {step === 'done' && (
                   <motion.div
                     key="done"
-                    initial={{ opacity: 0, scale: 0.95 }}
+                    initial={{ opacity: 0, scale: 0.98 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    className="flex flex-col items-center justify-center py-12 text-center"
+                    className="py-2"
                   >
-                    <div className="bg-primary/5 rounded-full p-6 mb-6">
-                      <Send size={32} className="text-primary" />
-                    </div>
-                    <h4 className="text-xl font-bold mb-2">Заказ отправлен!</h4>
-                    <p className="text-sm opacity-50 mb-1">Заказ #{orderId}</p>
-                    <p className="text-sm opacity-50 mb-6">
-                      Перейдите в чат, чтобы связаться с администратором
-                    </p>
-                    <button
-                      onClick={handleGoToChat}
-                      className="bg-primary text-primary-inv rounded-full px-8 py-3 font-bold hover:scale-105 active:scale-95 transition-all"
-                    >
-                      Открыть чат
-                    </button>
+                    <OrderAccepted
+                      orderId={orderId}
+                      lines={acceptedLines}
+                      total={acceptedTotal}
+                      onOpenChat={handleGoToChat}
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>
@@ -298,7 +332,7 @@ export function CartSidebar() {
 
             {step === 'form' && (
               <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-primary/5">
-                {submitError && (
+                {submitError && submitError !== CONSENT_ERRORS.terms && (
                   <p className="text-xs text-red-500 mb-2 px-1">{submitError}</p>
                 )}
                 <button

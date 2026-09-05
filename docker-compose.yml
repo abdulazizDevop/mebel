@@ -1,8 +1,17 @@
+# Container logs carry IPs / User-Agents (personal data) — cap their size so
+# they rotate instead of piling up for years (compliance/data-retention-policy.md).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   db:
     # AWS Public ECR mirror of Docker Hub library/* — no anonymous rate limit.
     image: public.ecr.aws/docker/library/postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-mebel}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
@@ -19,6 +28,7 @@ services:
     build:
       context: ./backend
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
@@ -47,7 +57,13 @@ services:
       args:
         # Frontend talks to nginx itself via /api — same origin, no CORS.
         VITE_API_URL: /api
+        # Яндекс.Метрика — set VITE_METRIKA_ID in the root .env to switch the
+        # counter on. It is loaded only after the visitor accepts analytics
+        # cookies; leave empty to keep analytics off entirely.
+        VITE_METRIKA_ID: ${VITE_METRIKA_ID:-}
+        VITE_METRIKA_WEBVISOR: ${VITE_METRIKA_WEBVISOR:-}
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       api:
         condition: service_healthy

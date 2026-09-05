@@ -12,6 +12,11 @@ COPY . .
 # same-host deploy where nginx proxies /api → backend).
 ARG VITE_API_URL=/api
 ENV VITE_API_URL=$VITE_API_URL
+# Яндекс.Метрика counter (optional; consent-gated at runtime). Empty = off.
+ARG VITE_METRIKA_ID=
+ARG VITE_METRIKA_WEBVISOR=
+ENV VITE_METRIKA_ID=$VITE_METRIKA_ID
+ENV VITE_METRIKA_WEBVISOR=$VITE_METRIKA_WEBVISOR
 RUN npm run build
 
 ### Stage 2 — serve the static bundle behind nginx

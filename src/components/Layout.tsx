@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import { Navbar } from './Navbar';
+import { Footer } from './Footer';
 import { BellToggle } from './BellToggle';
 import { useTheme } from '../context/ThemeContext';
 
@@ -54,6 +55,8 @@ export function Layout({ children }: LayoutProps) {
       <main className="px-4 sm:px-6 md:px-12 lg:px-24 relative z-10">
         {children}
       </main>
+
+      <Footer />
 
       <Navbar />
     </div>

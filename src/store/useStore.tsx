@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Product, products as defaultProducts } from '../data/products';
+import { getVisitorId, hasAnalyticsConsent } from '../consent/cookieConsent';
 import {
   ApiError,
   CategoryDTO,
@@ -29,6 +30,8 @@ import {
   productToCreateDto,
   productToUpdateDto,
   registerCustomer as apiRegisterCustomer,
+  recordConsent as apiRecordConsent,
+  deleteCustomerAccount as apiDeleteCustomerAccount,
   sendChatAsAdmin as apiSendChatAsAdmin,
   sendChatAsCustomer as apiSendChatAsCustomer,
   sendChatAsGuest as apiSendChatAsGuest,
@@ -176,7 +179,7 @@ interface StoreContextType {
 
   // Orders
   orders: Order[];
-  placeOrder: (name: string, phone: string) => Promise<string | null>;
+  placeOrder: (name: string, phone: string, consents: OrderConsents) => Promise<string | null>;
   placeCustomOrder: (
     name: string,
     phone: string,
@@ -184,6 +187,7 @@ interface StoreContextType {
     height: string,
     depth: string,
     description: string,
+    consents: OrderConsents,
   ) => Promise<string | null>;
   activeOrderId: string | null;
   setActiveOrderId: (id: string | null) => void;
@@ -259,12 +263,32 @@ interface StoreContextType {
   logoutAdmin: () => void;
 
   // User session (regular users)
-  userSession: { name: string } | null;
-  setUserSession: (session: { name: string } | null) => void;
+  userSession: UserSession | null;
+  setUserSession: (session: UserSession | null) => void;
   logoutUser: () => void;
   registeredUsers: RegisteredUser[];
-  registerUser: (name: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  registerUser: (name: string, password: string, consents: RegisterConsents) => Promise<{ ok: boolean; error?: string }>;
   loginUser: (name: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  /** «Удалить аккаунт» — wipes the session and reloads on success. */
+  deleteAccount: (password: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Opt in / out of advertising from the profile (38-ФЗ). */
+  updateMarketingConsent: (granted: boolean) => Promise<{ ok: boolean; error?: string }>;
+}
+
+export interface UserSession {
+  name: string;
+  marketingAllowed?: boolean;
+}
+
+/** Checkbox states collected by the checkout / custom-order forms. The
+ *  required boxes are enforced by the forms themselves (and by the server). */
+export interface OrderConsents {
+  marketing: boolean;
+}
+
+export interface RegisterConsents {
+  personalData: boolean;
+  marketing: boolean;
 }
 
 const StoreContext = createContext<StoreContextType | null>(null);
@@ -332,7 +356,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     wipeAllAndReload('/profile');
   };
 
-  const [userSession, setUserSession] = useState<{ name: string } | null>(
+  const [userSession, setUserSession] = useState<UserSession | null>(
     () => dbGet(DB_KEYS.userSession, null)
   );
   const logoutUser = () => {
@@ -359,7 +383,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
     if (tokenStore.get('customer')) {
       fetchCustomerMe()
-        .then((me) => setUserSession({ name: me.name }))
+        .then((me) => setUserSession({ name: me.name, marketingAllowed: me.marketing_allowed }))
         .catch(() => {
           tokenStore.clear('customer');
           setUserSession(null);
@@ -470,6 +494,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Fire-and-forget POST to the backend. Failures are swallowed because we
   // do NOT want a flaky analytics endpoint to break the storefront UX.
   const trackEvent = useCallback((event: Omit<AnalyticsEvent, 'timestamp'>) => {
+    // Behavioural analytics is optional processing — only after the visitor
+    // allowed analytics cookies in the banner (spec §16/§31).
+    if (!hasAnalyticsConsent()) return;
     apiIngestAnalyticsEvent({
       type: event.type,
       product_id: event.productId,
@@ -510,7 +537,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const placeOrder = async (name: string, phone: string): Promise<string | null> => {
+  const placeOrder = async (name: string, phone: string, consents: OrderConsents): Promise<string | null> => {
     try {
       const dto = await apiPlaceOrder({
         customer_name: name,
@@ -520,6 +547,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           qty: c.qty,
           color_index: c.colorIndex,
         })),
+        terms_accepted: true, // the form refuses to submit until the box is ticked
+        marketing_consent: consents.marketing,
+        request_id: getVisitorId(),
       });
       const order = dtoToOrder(dto);
       setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
@@ -544,6 +574,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     height: string,
     depth: string,
     description: string,
+    consents: OrderConsents,
   ): Promise<string | null> => {
     const dims = `${width} × ${depth} × ${height} см`;
     const note = `Размеры: ${dims}${description ? `\nОписание: ${description}` : ''}`;
@@ -553,6 +584,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         customer_phone: phone,
         items: [],
         note,
+        terms_accepted: true, // both required boxes are enforced by the form
+        personal_data_consent: true,
+        marketing_consent: consents.marketing,
+        request_id: getVisitorId(),
       });
       const order = dtoToOrder(dto);
       setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
@@ -715,11 +750,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const registerUser = async (
     name: string,
     password: string,
+    consents: RegisterConsents,
   ): Promise<{ ok: boolean; error?: string }> => {
     try {
-      await apiRegisterCustomer(name, password);
+      await apiRegisterCustomer(name, password, {
+        personal_data_consent: consents.personalData,
+        marketing_consent: consents.marketing,
+      });
       const me = await fetchCustomerMe();
-      setUserSession({ name: me.name });
+      setUserSession({ name: me.name, marketingAllowed: me.marketing_allowed });
       return { ok: true };
     } catch (e) {
       const msg = e instanceof ApiError
@@ -736,7 +775,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     try {
       await apiLoginCustomer(name, password);
       const me = await fetchCustomerMe();
-      setUserSession({ name: me.name });
+      setUserSession({ name: me.name, marketingAllowed: me.marketing_allowed });
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : 'Не удалось подключиться к серверу';
+      return { ok: false, error: msg };
+    }
+  };
+
+  const deleteAccount = async (password: string): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await apiDeleteCustomerAccount(password);
+      apiLogoutCustomer();
+      setUserSession(null);
+      wipeAllAndReload('/');
+      return { ok: true };
+    } catch (e) {
+      const msg = e instanceof ApiError
+        ? (e.status === 403 ? 'Неверный пароль' : e.message)
+        : 'Не удалось подключиться к серверу';
+      return { ok: false, error: msg };
+    }
+  };
+
+  const updateMarketingConsent = async (granted: boolean): Promise<{ ok: boolean; error?: string }> => {
+    try {
+      await apiRecordConsent({
+        consent_type: 'marketing',
+        granted,
+        source_form: 'profile',
+        request_id: getVisitorId(),
+      });
+      setUserSession((prev) => (prev ? { ...prev, marketingAllowed: granted } : prev));
       return { ok: true };
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : 'Не удалось подключиться к серверу';
@@ -872,6 +942,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       whatsappPhone, callPhone, refreshConfig,
       adminSession, setAdminSession, logoutAdmin,
       userSession, setUserSession, logoutUser, registeredUsers, registerUser, loginUser,
+      deleteAccount, updateMarketingConsent,
     }}>
       {children}
     </StoreContext.Provider>

@@ -1,17 +1,25 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { LogIn, UserPlus, KeyRound, Copy, Check, LogOut, User } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { LogIn, UserPlus, KeyRound, Copy, Check, LogOut, User, ShieldCheck, Trash2 } from 'lucide-react';
 import { cn } from '../utils/cn';
 import { LiquidButton } from '../components/LiquidButton';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
+import {
+  CONSENT_ERRORS,
+  ConsentCheckbox,
+  MarketingConsentText,
+  PersonalDataConsentText,
+} from '../components/ConsentCheckbox';
+import { OPERATOR } from '../legal/documents';
 
 export function Profile() {
   const navigate = useNavigate();
   const {
     loginAdmin, adminSession,
     userSession, setUserSession, logoutUser, registerUser, loginUser,
+    deleteAccount, updateMarketingConsent,
     orders, setActiveOrderId,
   } = useStore();
   const [submitting, setSubmitting] = useState(false);
@@ -22,6 +30,18 @@ export function Profile() {
   const [error, setError] = useState('');
   const [registered, setRegistered] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Registration consents — unchecked by default (ТЗ §10, §14).
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [consentTouched, setConsentTouched] = useState(false);
+
+  // «Согласия и данные» card (logged-in customers).
+  const [marketingBusy, setMarketingBusy] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
 
   // Navigate to admin AFTER adminSession is set in context
   useEffect(() => {
@@ -38,12 +58,34 @@ export function Profile() {
   const handleRegister = async () => {
     if (!nameField.trim() || !passwordField.trim()) { setError('Заполните все поля'); return; }
     if (passwordField.length < 4) { setError('Пароль должен быть не менее 4 символов'); return; }
+    setConsentTouched(true);
+    if (!personalDataConsent) { setError(CONSENT_ERRORS.personalData); return; }
     setSubmitting(true);
-    const result = await registerUser(nameField.trim(), passwordField.trim());
+    const result = await registerUser(nameField.trim(), passwordField.trim(), {
+      personalData: true,
+      marketing: marketingOptIn,
+    });
     setSubmitting(false);
     if (!result.ok) { setError(result.error || 'Не удалось зарегистрироваться'); return; }
     setRegistered(true);
     setError('');
+  };
+
+  const handleToggleMarketing = async () => {
+    if (!userSession || marketingBusy) return;
+    setMarketingBusy(true);
+    const res = await updateMarketingConsent(!userSession.marketingAllowed);
+    setMarketingBusy(false);
+    if (!res.ok) setError(res.error || 'Не удалось сохранить настройку');
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletePassword || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    const res = await deleteAccount(deletePassword);
+    setDeleting(false);
+    if (!res.ok) setDeleteError(res.error || 'Не удалось удалить аккаунт');
   };
 
   const handleLogin = async () => {
@@ -187,6 +229,81 @@ export function Profile() {
               </div>
             )}
           </div>
+
+          {/* Consents & personal data (152-ФЗ ст. 14, 21; 38-ФЗ ст. 18) */}
+          <div className="space-y-4" style={{ ...neuCard, padding: '24px' }}>
+            <h4 className="font-bold text-sm flex items-center gap-2"><ShieldCheck size={16} /> Согласия и данные</h4>
+
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold">Рекламные предложения</p>
+                <p className="text-[11px] opacity-50 leading-relaxed">
+                  {userSession.marketingAllowed
+                    ? 'Вы подписаны на акции и специальные предложения'
+                    : 'Вы не получаете рекламные сообщения'}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleMarketing}
+                disabled={marketingBusy}
+                className="text-xs font-bold rounded-full px-4 py-2 shrink-0 disabled:opacity-50"
+                style={{ background: neuBg, boxShadow: neuShadowSm, color: neuTextColor }}
+              >
+                {userSession.marketingAllowed ? 'Отказаться' : 'Подписаться'}
+              </button>
+            </div>
+
+            <p className="text-[11px] opacity-60 leading-relaxed break-words">
+              Отозвать согласие на обработку персональных данных, запросить сведения о ваших данных, их уточнение
+              или удаление можно по адресу{' '}
+              <a href={OPERATOR.emailHref} className="underline underline-offset-2">{OPERATOR.email}</a>.{' '}
+              <Link to="/privacy" className="underline underline-offset-2">Политика обработки персональных данных</Link>
+            </p>
+
+            {!deleteOpen ? (
+              <button
+                onClick={() => setDeleteOpen(true)}
+                className="w-full rounded-full py-2.5 text-xs font-bold text-red-600 flex items-center justify-center gap-1.5"
+                style={{ background: neuBg, boxShadow: neuShadowSm }}
+              >
+                <Trash2 size={14} /> Удалить аккаунт
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] opacity-70 leading-relaxed">
+                  Аккаунт будет закрыт, а данные, не требующие хранения по закону, удалены. Сведения о заказах
+                  сохраняются в объёме, необходимом для исполнения договора и требований законодательства.
+                  Для подтверждения введите пароль.
+                </p>
+                <input
+                  type="password"
+                  value={deletePassword}
+                  onChange={(e) => { setDeletePassword(e.target.value); setDeleteError(''); }}
+                  placeholder="Пароль"
+                  autoComplete="current-password"
+                  className="w-full px-5 py-3 outline-none text-sm"
+                  style={neuInset}
+                />
+                {deleteError && <p className="text-xs text-terracotta">{deleteError}</p>}
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleConfirmDelete}
+                    disabled={deleting || !deletePassword}
+                    className="flex-1 rounded-full py-2.5 text-xs font-bold bg-red-600 text-white disabled:opacity-50"
+                  >
+                    {deleting ? 'Удаляем…' : 'Подтвердить удаление'}
+                  </button>
+                  <button
+                    onClick={() => { setDeleteOpen(false); setDeletePassword(''); setDeleteError(''); }}
+                    className="flex-1 rounded-full py-2.5 text-xs font-bold"
+                    style={{ background: neuBg, boxShadow: neuShadowSm, color: neuTextColor }}
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -281,6 +398,24 @@ export function Profile() {
                 style={neuInset}
               />
             </div>
+            {authMode === 'register' && (
+              <div className="space-y-2 pt-1" style={{ color: neuTextColor }}>
+                <ConsentCheckbox
+                  id="register-personal-data"
+                  checked={personalDataConsent}
+                  invalid={consentTouched && !personalDataConsent}
+                  onChange={(v) => {
+                    setPersonalDataConsent(v);
+                    if (v && error === CONSENT_ERRORS.personalData) setError('');
+                  }}
+                >
+                  <PersonalDataConsentText />
+                </ConsentCheckbox>
+                <ConsentCheckbox id="register-marketing" checked={marketingOptIn} onChange={setMarketingOptIn}>
+                  <MarketingConsentText />
+                </ConsentCheckbox>
+              </div>
+            )}
             {error && <p className="text-sm text-terracotta text-center">{error}</p>}
           </div>
           <div className="flex justify-center">

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -8,10 +9,13 @@ import { Favorites } from './pages/Favorites';
 import { Profile } from './pages/Profile';
 import { Admin } from './pages/Admin';
 import { Chat } from './pages/Chat';
+import { LegalPage } from './pages/Legal';
 import { StoreProvider } from './store/useStore';
 import { ThemeProvider } from './context/ThemeContext';
 import { CartSidebar } from './components/CartSidebar';
 import { UpdateBanner } from './components/UpdateBanner';
+import { CookieConsent } from './components/CookieConsent';
+import { metrikaHit } from './analytics/metrika';
 
 const pageVariants = {
   initial: { opacity: 0, y: 24, scale: 0.99 },
@@ -49,10 +53,29 @@ function AnimatedRoutes() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/chat" element={<Chat />} />
+
+          {/* Legal pages (152-ФЗ / 2300-1 / 38-ФЗ) — Russian only, texts in src/legal/documents.ts */}
+          <Route path="/requisites" element={<LegalPage slug="requisites" />} />
+          <Route path="/privacy" element={<LegalPage slug="privacy" />} />
+          <Route path="/personal-data-consent" element={<LegalPage slug="personal-data-consent" />} />
+          <Route path="/cookies" element={<LegalPage slug="cookies" />} />
+          <Route path="/marketing-consent" element={<LegalPage slug="marketing-consent" />} />
+          <Route path="/offer" element={<LegalPage slug="offer" />} />
+          <Route path="/delivery-payment" element={<LegalPage slug="delivery-payment" />} />
+          <Route path="/returns" element={<LegalPage slug="returns" />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
   );
+}
+
+/** SPA page views for Яндекс.Метрика — no-op until the visitor allowed analytics. */
+function MetrikaRouteHits() {
+  const location = useLocation();
+  useEffect(() => {
+    metrikaHit(location.pathname + location.search);
+  }, [location.pathname, location.search]);
+  return null;
 }
 
 function App() {
@@ -65,10 +88,12 @@ function App() {
               service worker into control and reloads — no reinstall, no
               "remove from Home Screen" needed. */}
           <UpdateBanner />
+          <MetrikaRouteHits />
           <Layout>
             <AnimatedRoutes />
             <CartSidebar />
           </Layout>
+          <CookieConsent />
         </Router>
       </StoreProvider>
     </ThemeProvider>

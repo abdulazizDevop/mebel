@@ -5,9 +5,12 @@ from app.models.order import Order, OrderItem, ChatMessage, OrderStatus, ChatSen
 from app.models.analytics import AnalyticsEvent, AnalyticsType
 from app.models.push import PushToken, PushPlatform
 from app.models.setting import Setting
+from app.models.consent import ConsentLog, ConsentStatus
 
 __all__ = [
     "Setting",
+    "ConsentLog",
+    "ConsentStatus",
     "User",
     "Customer",
     "UserRole",

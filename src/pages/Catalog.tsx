@@ -3,10 +3,18 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link, useNavigate } from 'react-router-dom';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
-import { ShoppingBag, SlidersHorizontal, Filter, ArrowRight, Compass, Check, X, Ruler, MessageCircle, Send, Factory, Truck } from 'lucide-react';
+import { ShoppingBag, SlidersHorizontal, Filter, ArrowRight, Compass, Check, X, Ruler, Send, Factory, Truck } from 'lucide-react';
 import { LiquidButton } from '../components/LiquidButton';
 import { useStore } from '../store/useStore';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
+import {
+  CONSENT_ERRORS,
+  ConsentCheckbox,
+  MarketingConsentText,
+  PersonalDataConsentText,
+  TermsConsentText,
+} from '../components/ConsentCheckbox';
+import { OrderAccepted } from '../components/OrderAccepted';
 
 // categoryList is now built dynamically inside the component
 
@@ -164,45 +172,52 @@ function CustomOrderForm() {
   const [height, setHeight] = useState('');
   const [depth, setDepth] = useState('');
   const [desc, setDesc] = useState('');
-  const [sent, setSent] = useState(false);
+  const [sentOrderId, setSentOrderId] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
+
+  // Legal checkboxes — a custom request is a «заявка» (152-ФЗ consent) AND an
+  // order (terms acknowledgement). Both start unchecked; marketing is optional.
+  const [personalDataConsent, setPersonalDataConsent] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [marketingConsent, setMarketingConsent] = useState(false);
+  const [consentTouched, setConsentTouched] = useState(false);
 
   const nameValid = isValidName(name);
   const phoneValid = isValidPhone(phone);
   const sizesValid = !!(width && height && depth);
   const formValid = nameValid && phoneValid && sizesValid;
+  const consentsValid = personalDataConsent && termsAccepted;
 
   const fc = 'w-full bg-surface rounded-2xl px-5 py-3 border border-primary/10 shadow-sm focus:ring-2 focus:ring-primary outline-none text-sm';
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setNameTouched(true);
     setPhoneTouched(true);
-    if (!formValid) return;
-    placeCustomOrder(name.trim(), phone.trim(), width, height, depth, desc.trim());
-    setSent(true);
+    setConsentTouched(true);
+    if (!formValid || !consentsValid || submitting) return;
+    setSubmitting(true);
+    const id = await placeCustomOrder(name.trim(), phone.trim(), width, height, depth, desc.trim(), {
+      marketing: marketingConsent,
+    });
+    setSubmitting(false);
+    if (id) setSentOrderId(id);
   };
 
-  if (sent) {
+  if (sentOrderId) {
     return (
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-surface rounded-3xl shadow-sm p-8 text-center max-w-md mx-auto"
+        className="bg-surface rounded-3xl shadow-sm p-6 sm:p-8 max-w-md mx-auto"
       >
-        <div className="inline-flex bg-green-50 rounded-full p-4 mb-4">
-          <Check size={28} className="text-green-600" />
-        </div>
-        <h3 className="text-xl font-bold mb-2">Заявка отправлена!</h3>
-        <p className="text-sm opacity-50 mb-6">Администратор получил ваш индивидуальный заказ и скоро ответит в чате</p>
-        <button
-          onClick={() => navigate('/chat')}
-          className="bg-primary text-primary-inv rounded-full px-6 py-3 font-bold flex items-center justify-center gap-2 mx-auto hover:scale-105 active:scale-95 transition-transform"
-        >
-          <MessageCircle size={18} />
-          Открыть чат
-        </button>
+        <OrderAccepted
+          orderId={sentOrderId}
+          customSummary={`Индивидуальный заказ — размеры ${width} × ${depth} × ${height} см`}
+          onOpenChat={() => navigate('/chat')}
+        />
       </motion.div>
     );
   }
@@ -279,10 +294,39 @@ function CustomOrderForm() {
         <textarea value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Опишите что вы хотите..." rows={3} className={fc + ' resize-none'} />
       </div>
 
+      {/* Legal consents (ТЗ §12, §13, §14) */}
+      <div className="space-y-2 pt-1">
+        <ConsentCheckbox
+          id="custom-personal-data"
+          checked={personalDataConsent}
+          onChange={setPersonalDataConsent}
+          invalid={consentTouched && !personalDataConsent}
+        >
+          <PersonalDataConsentText />
+        </ConsentCheckbox>
+        {consentTouched && !personalDataConsent && (
+          <p className="text-[11px] text-red-500 px-2">{CONSENT_ERRORS.personalData}</p>
+        )}
+        <ConsentCheckbox
+          id="custom-terms"
+          checked={termsAccepted}
+          onChange={setTermsAccepted}
+          invalid={consentTouched && !termsAccepted}
+        >
+          <TermsConsentText />
+        </ConsentCheckbox>
+        {consentTouched && !termsAccepted && (
+          <p className="text-[11px] text-red-500 px-2">{CONSENT_ERRORS.terms}</p>
+        )}
+        <ConsentCheckbox id="custom-marketing" checked={marketingConsent} onChange={setMarketingConsent}>
+          <MarketingConsentText />
+        </ConsentCheckbox>
+      </div>
+
       <div className="flex justify-center">
         <div className="w-full max-w-xs">
           <LiquidButton width={240} height={54}>
-            <span className="flex items-center gap-2"><Send size={18} /> Отправить заявку</span>
+            <span className="flex items-center gap-2"><Send size={18} /> {submitting ? 'Отправляем…' : 'Оформить заказ'}</span>
           </LiquidButton>
         </div>
       </div>

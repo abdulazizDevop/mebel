@@ -7,7 +7,10 @@ import type {
   AnalyticsEventInDTO,
   CategoryDTO,
   ChatMessageDTO,
+  ConsentInDTO,
+  ConsentLogDTO,
   CustomerUser,
+  PublicConfigDTO,
   OrderCreateDTO,
   OrderDTO,
   OrderStatus,
@@ -40,11 +43,36 @@ export const deleteAdminUser = (id: string) =>
   api.delete<void>(`/admin/users/${id}`, { tokenSlot: 'admin' });
 
 /* ─── Customer auth ─── */
-export async function registerCustomer(name: string, password: string): Promise<TokenResponse> {
-  const tok = await api.post<TokenResponse>('/auth/customer/register', { name, password });
+export interface RegisterConsentsDTO {
+  /** Must be true — the server refuses registration without it (152-ФЗ). */
+  personal_data_consent: boolean;
+  /** Optional advertising opt-in, stored separately. */
+  marketing_consent: boolean;
+}
+export async function registerCustomer(
+  name: string,
+  password: string,
+  consents: RegisterConsentsDTO,
+): Promise<TokenResponse> {
+  const tok = await api.post<TokenResponse>('/auth/customer/register', { name, password, ...consents });
   tokenStore.set('customer', tok.access_token);
   return tok;
 }
+/** «Удалить аккаунт» — irreversible; the server re-checks the password. */
+export const deleteCustomerAccount = (password: string) =>
+  api.post<void>('/auth/customer/me/delete', { password }, { tokenSlot: 'customer' });
+
+/* ─── Consents (cookie banner / marketing) ─── */
+/** Works for guests (needs `request_id`) and logged-in customers alike. */
+export const recordConsent = (input: ConsentInDTO) =>
+  api.post<ConsentLogDTO>('/consents', input, { tokenSlot: 'customer' });
+export const myConsents = () => api.get<ConsentLogDTO[]>('/consents/me', { tokenSlot: 'customer' });
+export const withdrawConsent = (consent_type: 'marketing' | 'personal_data') =>
+  api.post<{ consent_type: string; revoked: number; marketing_allowed: boolean }>(
+    '/consents/withdraw',
+    { consent_type },
+    { tokenSlot: 'customer' },
+  );
 export async function loginCustomer(name: string, password: string): Promise<TokenResponse> {
   const tok = await api.postForm<TokenResponse>('/auth/customer/login', { username: name, password });
   tokenStore.set('customer', tok.access_token);
@@ -163,7 +191,7 @@ export const uploadAudio = (file: File, orderId?: string) => uploadChatFile('/up
 export const uploadChatImage = (file: File, orderId?: string) => uploadChatFile('/uploads/chat-image', file, orderId);
 
 /* ─── Public runtime config (WhatsApp / call numbers, etc.) ─── */
-export const fetchPublicConfig = () => api.get<{ whatsapp_phone: string; call_phone: string }>('/config');
+export const fetchPublicConfig = () => api.get<PublicConfigDTO>('/config');
 
 /* ─── Admin: contact settings (owner-editable numbers) ─── */
 export interface ContactSettings {

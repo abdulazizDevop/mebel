@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -13,6 +14,7 @@ from app.api import admin_users as admin_users_router
 from app.api import analytics as analytics_router
 from app.api import auth as auth_router
 from app.api import categories as categories_router
+from app.api import consents as consents_router
 from app.api import customers as customers_router
 from app.api import orders as orders_router
 from app.api import products as products_router
@@ -22,12 +24,38 @@ from app.api import uploads as uploads_router
 from app.api import ws_chat as ws_chat_router
 from app.config import get_settings
 from app.database import get_db
+from app.legal import DOCUMENT_VERSIONS
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.services.settings_store import get_contact_config
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
 settings = get_settings()
+
+
+class _RedactTokensFilter(logging.Filter):
+    """Keep bearer tokens out of the access log (compliance §29).
+
+    The chat WebSocket authenticates with `?token=<jwt>` and uvicorn logs the
+    full path including the query string, so the JWT would otherwise land in
+    `docker logs`. Everything else uses the Authorization header, which the
+    access log never prints.
+    """
+
+    _pattern = re.compile(r"(token=)[^&\s\"']+")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.args:
+            record.args = tuple(
+                self._pattern.sub(r"\1[redacted]", a) if isinstance(a, str) else a for a in record.args
+            )
+        if isinstance(record.msg, str) and "token=" in record.msg:
+            record.msg = self._pattern.sub(r"\1[redacted]", record.msg)
+        return True
+
+
+for _name in ("uvicorn.access", "uvicorn.error"):
+    logging.getLogger(_name).addFilter(_RedactTokensFilter())
 
 
 @asynccontextmanager
@@ -60,6 +88,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Paths whose responses carry personal data — forbid any intermediary or
+# browser cache from keeping a copy (nginx in front honours upstream headers).
+_NO_STORE_PREFIXES = ("/orders", "/auth", "/consents", "/admin", "/push", "/analytics")
+
+
+@app.middleware("http")
+async def security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    if request.url.path.startswith(_NO_STORE_PREFIXES):
+        response.headers.setdefault("Cache-Control", "no-store")
+    return response
+
 
 @app.get("/health", tags=["meta"])
 def health() -> dict[str, str]:
@@ -67,14 +110,19 @@ def health() -> dict[str, str]:
 
 
 @app.get("/config", tags=["meta"])
-def public_config(db: Session = Depends(get_db)) -> dict[str, str]:
-    """Public runtime config the SPA reads on load. Values come from the DB
-    (owner-editable in the admin Settings tab), falling back to env defaults."""
-    return get_contact_config(db)
+def public_config(db: Session = Depends(get_db)) -> dict:
+    """Public runtime config the SPA reads on load. Contact numbers come from
+    the DB (owner-editable in the admin Settings tab), falling back to env
+    defaults; `legal_versions` lets the SPA show and record which edition of
+    each legal document the user accepted."""
+    cfg: dict = dict(get_contact_config(db))
+    cfg["legal_versions"] = dict(DOCUMENT_VERSIONS)
+    return cfg
 
 
 app.include_router(auth_router.router)
 app.include_router(customers_router.router)
+app.include_router(consents_router.router)
 app.include_router(admin_users_router.router)
 app.include_router(categories_router.router)
 app.include_router(products_router.router)

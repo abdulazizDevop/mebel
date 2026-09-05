@@ -28,7 +28,37 @@ export interface AdminUserUpdateDTO {
 export interface CustomerUser {
   id: string;
   name: string;
+  /** Separate opt-in for advertising (38-ФЗ); never implied by registration. */
+  marketing_allowed: boolean;
   created_at: string;
+}
+
+/* ─── Consents (152-ФЗ / cookie banner) ─── */
+
+export type PublicConsentType = 'analytics_cookie' | 'marketing_cookie' | 'marketing';
+
+export interface ConsentInDTO {
+  consent_type: PublicConsentType;
+  granted: boolean;
+  source_form: string;
+  request_id?: string;
+  document_version?: string;
+}
+
+export interface ConsentLogDTO {
+  id: string;
+  consent_type: string;
+  document_version: string;
+  source_form: string;
+  status: 'active' | 'revoked' | 'denied';
+  created_at: string;
+  revoked_at: string | null;
+}
+
+export interface PublicConfigDTO {
+  whatsapp_phone: string;
+  call_phone: string;
+  legal_versions?: Record<string, string>;
 }
 
 export interface TokenResponse {
@@ -129,6 +159,14 @@ export interface OrderCreateDTO {
   /** Free-form text appended to the auto-seeded first chat message —
    *  used for custom-furniture orders that have no line items. */
   note?: string;
+  /** «Я ознакомился с условиями…» — required by the server for every order. */
+  terms_accepted: boolean;
+  /** Required by the server for custom-furniture requests (no line items). */
+  personal_data_consent?: boolean;
+  /** Optional, separate, never blocks the order. */
+  marketing_consent?: boolean;
+  /** Anonymous visitor id so guest consents correlate with the cookie decision. */
+  request_id?: string;
 }
 
 /* ─── Analytics ─── */

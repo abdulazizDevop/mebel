@@ -72,6 +72,17 @@ class OrderCreateIn(BaseModel):
         description="Optional free-form text appended to the auto-seeded first chat message; "
         "used by custom-furniture orders that have no line items.",
     )
+    # «Я ознакомился с условиями дистанционной продажи, оплаты, доставки и
+    # возврата» — required for every order; default false, server-enforced.
+    terms_accepted: bool = False
+    # Required only for custom-furniture requests (no line items): they are a
+    # pre-contract «заявка», so 152-ФЗ consent applies (spec §12).
+    personal_data_consent: bool = False
+    # Optional, separate, never blocks the order (spec §14).
+    marketing_consent: bool = False
+    # Anonymous visitor id so guest consents can be correlated with the
+    # cookie-banner decision made in the same browser.
+    request_id: str | None = Field(default=None, max_length=64)
 
 
 class OrderStatusUpdate(BaseModel):

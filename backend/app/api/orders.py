@@ -1,12 +1,14 @@
 from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
 from app.deps import CurrentCustomer, CurrentUser, get_optional_customer, require_section
+from app.legal import ConsentType
+from app.services.consent import record_consent
 from app.models import (
     ChatMessage,
     ChatSender,
@@ -75,12 +77,27 @@ def _load_order(db: Session, order_id: str) -> Order:
 
 @router.post("", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 def create_order(
+    request: Request,
     payload: OrderCreateIn,
     db: Annotated[Session, Depends(get_db)],
     customer: Annotated[Customer | None, Depends(get_optional_customer)],
 ):
     """Anyone can place an order. If a customer Bearer token is sent, the order
     is auto-attached to that customer so they can see it from any device."""
+    # Legal gates first (spec §13/§12). The SPA disables the button too, but
+    # the server is the authority — a forged request without consent is refused.
+    if not payload.terms_accepted:
+        raise HTTPException(
+            status_code=400,
+            detail="Необходимо подтвердить ознакомление с условиями продажи, оплаты, доставки и возврата",
+        )
+    is_custom_request = not payload.items
+    if is_custom_request and not payload.personal_data_consent:
+        raise HTTPException(
+            status_code=400,
+            detail="Необходимо согласие на обработку персональных данных",
+        )
+
     # Snapshot every line item from the canonical Product row so historical
     # finance numbers stay accurate even if the product is later edited or
     # deleted. Prices are read server-side; the client cannot tamper with them.
@@ -148,6 +165,25 @@ def create_order(
     order.chat.append(ChatMessage(sender=ChatSender.client, text=intro))
 
     db.add(order)
+    db.flush()  # order.id is needed as the consent request_id
+
+    # Consent evidence lives in the same transaction as the order it covers.
+    source_form = "custom_order" if is_custom_request else "order"
+    common = dict(
+        source_form=source_form,
+        customer_id=customer.id if customer else None,
+        request_id=order.id,
+        request=request,
+    )
+    record_consent(db, consent_type=ConsentType.terms, granted=True, **common)
+    if is_custom_request:
+        record_consent(db, consent_type=ConsentType.personal_data, granted=True, **common)
+    record_consent(
+        db, consent_type=ConsentType.marketing, granted=bool(payload.marketing_consent), **common
+    )
+    if customer is not None and payload.marketing_consent:
+        customer.marketing_allowed = True
+
     db.commit()
     db.refresh(order)
     return order
