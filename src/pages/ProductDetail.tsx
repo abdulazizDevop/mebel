@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check } from 'lucide-react';
@@ -17,6 +17,11 @@ export function ProductDetail() {
   const [showOrderToast, setShowOrderToast] = useState(false);
   const [activeColor, setActiveColor] = useState(0);
   const [activeThumb, setActiveThumb] = useState(0);
+  // Keep the selected thumbnail visible when the strip scrolls horizontally.
+  const activeThumbRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    activeThumbRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  }, [activeThumb]);
   const [expanded, setExpanded] = useState(false);
 
   // The catalog list ships a slim version of every product (no per-colour
@@ -154,21 +159,27 @@ export function ProductDetail() {
                 <ChevronLeft size={18} />
               </button>
 
-              <div className="flex gap-3 flex-1 justify-center py-1 px-1">
+              {/* Scrollable strip: with 10+ photos the row used to overflow the
+                  viewport (thumbs are flex-shrink-0), which made mobile Safari
+                  zoom the whole page out — the "desktop version" bug. */}
+              <div className="flex-1 min-w-0 overflow-x-auto scrollbar-hide snap-x snap-mandatory py-1 px-1">
+                <div className="flex gap-3 w-max mx-auto">
                 {thumbs.map((src, i) => (
                   <button
                     key={i}
+                    ref={i === activeThumb ? activeThumbRef : undefined}
                     onClick={() => setActiveThumb(i)}
                     className={cn(
-                      "w-11 h-11 rounded-full overflow-hidden border-2 flex-shrink-0 transition-all duration-200",
+                      "w-11 h-11 rounded-full overflow-hidden border-2 flex-shrink-0 snap-center transition-all duration-200",
                       i === activeThumb
                         ? "border-primary shadow-md scale-[1.15]"
                         : "border-transparent opacity-50 hover:opacity-100"
                     )}
                   >
-                    <img src={src} alt="" className="w-full h-full object-cover" />
+                    <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   </button>
                 ))}
+                </div>
               </div>
 
               <button

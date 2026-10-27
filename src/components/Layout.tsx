@@ -31,8 +31,10 @@ export function Layout({ children }: LayoutProps) {
   const { theme } = useTheme();
   const isLight = theme === 'light';
 
+  // overflow-x-clip: safety net so a wide child can never widen the page and
+  // make mobile browsers zoom out to a "desktop" layout.
   return (
-    <div className="min-h-screen pb-32 relative">
+    <div className="min-h-screen pb-32 relative overflow-x-clip">
       {/* Waves — light mode only */}
       {isLight && (
         <>
