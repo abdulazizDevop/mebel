@@ -81,7 +81,7 @@ export function ProductDetail() {
   };
 
   return (
-    <div className="pb-36">
+    <div className="pb-10 sm:pb-36">
       <AnimatePresence>
         {showOrderToast && (
           <motion.div
@@ -288,16 +288,60 @@ export function ProductDetail() {
             )}
           </div>
         </div>
+
+        {/* Phones: WhatsApp + call live in the page flow under the specs.
+            The old three-pill fixed stack covered the title, thumbnails and
+            footer on a 390px screen; only the cart CTA stays sticky now. */}
+        {(whatsappPhone || callPhone) && (
+          <div className="sm:hidden flex flex-col gap-2 mt-6">
+            {whatsappPhone && (
+              <WhatsAppButton
+                phone={whatsappPhone}
+                variant="outline"
+                label="Написать в WhatsApp"
+                message={productWhatsappMessage(product.name, product.price)}
+                className="w-full py-3"
+              />
+            )}
+            {callPhone && <CallLink phone={callPhone} className="py-2" />}
+          </div>
+        )}
       </motion.div>
 
-      {/* Bottom bar — full-width on phones, compact right-aligned on larger screens */}
+      {/* Phones: one slim sticky row just above the navbar — cart CTA plus a
+          WhatsApp icon. Layout's pb-32 keeps it clear of the footer end. */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.4 }}
-        className="fixed bottom-28 left-4 right-4 sm:left-auto sm:right-6 z-40 flex flex-col items-stretch sm:items-end gap-2"
+        className="sm:hidden fixed bottom-[4.75rem] left-4 right-4 z-40 flex items-center gap-2"
       >
-        <div className="flex justify-center sm:justify-end">
+        <button
+          onClick={handleOrder}
+          className="flex-1 h-[52px] rounded-full bg-primary text-primary-inv font-bold text-sm flex items-center justify-center gap-2 shadow-xl active:scale-[0.98] transition-transform"
+        >
+          <ShoppingBag size={16} />
+          В корзину · {product.price.toLocaleString('ru-RU')} ₽
+        </button>
+        {whatsappPhone && (
+          <WhatsAppButton
+            phone={whatsappPhone}
+            variant="icon"
+            label="Написать в WhatsApp"
+            message={productWhatsappMessage(product.name, product.price)}
+            className="w-[52px] h-[52px] shadow-xl"
+          />
+        )}
+      </motion.div>
+
+      {/* Tablet/desktop: compact right-aligned floating stack (unchanged). */}
+      <motion.div
+        initial={{ opacity: 0, y: 40 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="hidden sm:flex fixed bottom-28 right-6 z-40 flex-col items-end gap-2"
+      >
+        <div className="flex justify-end">
           <LiquidButton onClick={handleOrder} width={220} height={52}>
             <span className="flex items-center gap-2">
               <ShoppingBag size={16} />
@@ -311,13 +355,13 @@ export function ProductDetail() {
             variant="outline"
             label="Написать в WhatsApp"
             message={productWhatsappMessage(product.name, product.price)}
-            className="w-full sm:w-[220px] py-3 shadow-lg"
+            className="w-[220px] py-3 shadow-lg"
           />
         )}
         {callPhone && (
           <CallLink
             phone={callPhone}
-            className="bg-surface/90 backdrop-blur-sm rounded-full py-2 px-4 shadow-lg self-center sm:self-end"
+            className="bg-surface/90 backdrop-blur-sm rounded-full py-2 px-4 shadow-lg self-end"
           />
         )}
       </motion.div>

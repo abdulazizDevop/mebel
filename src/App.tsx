@@ -91,8 +91,11 @@ function App() {
           <MetrikaRouteHits />
           <Layout>
             <AnimatedRoutes />
-            <CartSidebar />
           </Layout>
+          {/* Outside <Layout>: its <main> is `relative z-10`, which trapped the
+              cart's z-[60]/z-[70] layers under the z-50 navbar, so the nav pill
+              sat on top of the "Оформить заказ" button on phones. */}
+          <CartSidebar />
           <CookieConsent />
         </Router>
       </StoreProvider>

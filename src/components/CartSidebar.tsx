@@ -103,7 +103,10 @@ export function CartSidebar() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 right-0 h-full h-[100dvh] w-full max-w-sm z-[70] shadow-2xl flex flex-col" style={{ backgroundColor: 'var(--color-bg)' }}
+            /* bg-background, not `var(--color-bg)`: that variable holds an RGB
+               triple, so the old inline style was invalid and the panel rendered
+               see-through over the blurred page. */
+            className="fixed top-0 right-0 h-[100dvh] w-full max-w-sm z-[70] shadow-2xl flex flex-col bg-background"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-primary/5">
@@ -120,8 +123,10 @@ export function CartSidebar() {
               </button>
             </div>
 
-            {/* Content */}
-            <div className="flex-1 overflow-y-auto p-6">
+            {/* Content — min-h-0 lets this flex child actually shrink and
+                scroll; without it a long checkout form pushed the footer with
+                «Отправить заказ» below the phone's viewport. */}
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
               <AnimatePresence mode="wait">
                 {step === 'cart' && (
                   <motion.div

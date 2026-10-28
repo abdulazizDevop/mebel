@@ -116,8 +116,7 @@ export function CookieConsent() {
         <div
           role="dialog"
           aria-label="Использование cookie"
-          className="fixed z-[55] left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md bottom-[calc(5.75rem+env(safe-area-inset-bottom))] sm:bottom-32 rounded-3xl shadow-2xl border border-primary/10 p-5 text-sm"
-          style={{ backgroundColor: 'var(--color-bg)' }}
+          className="fixed z-[55] left-3 right-3 sm:left-auto sm:right-6 sm:max-w-md bottom-[calc(5.75rem+env(safe-area-inset-bottom))] sm:bottom-32 rounded-3xl shadow-2xl border border-primary/10 p-5 text-sm bg-background"
         >
           <div className="flex items-start gap-3">
             <Cookie size={20} className="shrink-0 mt-0.5 opacity-70" />
@@ -165,8 +164,7 @@ export function CookieConsent() {
             role="dialog"
             aria-modal="true"
             aria-label="Настройки cookie"
-            className="relative w-full max-w-md rounded-3xl shadow-2xl border border-primary/10 p-6 text-sm max-h-[90dvh] overflow-y-auto"
-            style={{ backgroundColor: 'var(--color-bg)' }}
+            className="relative w-full max-w-md rounded-3xl shadow-2xl border border-primary/10 p-6 text-sm max-h-[90dvh] overflow-y-auto bg-background"
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
