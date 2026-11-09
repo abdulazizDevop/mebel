@@ -6,8 +6,10 @@ from app.models.analytics import AnalyticsEvent, AnalyticsType
 from app.models.push import PushToken, PushPlatform
 from app.models.setting import Setting
 from app.models.consent import ConsentLog, ConsentStatus
+from app.models.slug_history import SlugHistory
 
 __all__ = [
+    "SlugHistory",
     "Setting",
     "ConsentLog",
     "ConsentStatus",

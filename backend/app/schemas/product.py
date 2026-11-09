@@ -65,6 +65,10 @@ class ProductOut(BaseModel):
     id: str
     name: str
     sku: str
+    # URL pieces: /catalog/{category_slug}/{slug}. `category_slug` falls back
+    # to the `tovary` pseudo segment for uncategorised products.
+    slug: str
+    category_slug: str = "tovary"
     price: float
     purchase_price: float | None
     main_image: str

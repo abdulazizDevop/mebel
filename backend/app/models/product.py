@@ -21,6 +21,10 @@ class Product(Base):
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=_uid)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     sku: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    # URL slug (`krovat-turtsiya-160-i-180`), auto-derived from `name`, unique
+    # across all products. Nullable only so the migration can backfill; the
+    # API always sets it. See services/slug.py.
+    slug: Mapped[str | None] = mapped_column(String(96), unique=True, nullable=True, index=True)
 
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     purchase_price: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)

@@ -15,5 +15,7 @@ class Category(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(120), unique=True, nullable=False, index=True)
+    # URL slug (`krovati`), auto-derived from `name`; see services/slug.py.
+    slug: Mapped[str | None] = mapped_column(String(96), unique=True, nullable=True, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)

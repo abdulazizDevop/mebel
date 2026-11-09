@@ -18,5 +18,6 @@ class CategoryOut(BaseModel):
 
     id: int
     name: str
+    slug: str  # URL segment: /catalog/{slug}
     sort_order: int
     created_at: datetime

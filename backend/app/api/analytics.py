@@ -17,6 +17,8 @@ from app.models import (
 from app.schemas.analytics import (
     AnalyticsBatchIn,
     AnalyticsEventIn,
+    CampaignRowOut,
+    CampaignsOut,
     StatsOut,
     TopProductOut,
 )
@@ -187,6 +189,121 @@ def get_stats(
         top_viewed=top_viewed,
         top_carted=top_carted,
         top_favorited=top_favorited,
+        period=period,
+        range_from=range_from,
+        range_to=range_to,
+    )
+
+
+# ─── Per-campaign ad report (admin) ─────────────────────────────────────
+
+_NO_MARKS_KEY = "__direct__"
+
+
+def _clean(v: object) -> str | None:
+    if not isinstance(v, str):
+        return None
+    v = v.strip()
+    return v[:255] or None
+
+
+def _campaign_key(
+    source: str | None, medium: str | None, campaign: str | None, yclid: str | None, gclid: str | None
+) -> tuple[str, str, str | None, str | None, str | None]:
+    """Group rows by UTM; a click id without UTM still names its network."""
+    if not (source or medium or campaign):
+        if yclid:
+            source = "yandex-direct"
+        elif gclid:
+            source = "google-ads"
+        else:
+            return _NO_MARKS_KEY, "Без рекламных меток (прямые / поиск / соцсети)", None, None, None
+    key = "|".join([source or "", medium or "", campaign or ""])
+    label = " · ".join(p for p in (source, campaign or medium) if p) or (source or "")
+    return key, label, source, medium, campaign
+
+
+@router.get(
+    "/stats/campaigns",
+    response_model=CampaignsOut,
+    dependencies=[Depends(require_section("dashboard"))],
+)
+def get_campaign_stats(
+    db: Annotated[Session, Depends(get_db)],
+    period: PeriodKey = Query(default="month"),
+    custom_from: datetime | None = Query(default=None, alias="from"),
+    custom_to: datetime | None = Query(default=None, alias="to"),
+):
+    """Visitors come from `visit` analytics events whose `data` carries the
+    first-touch UTM / yclid / gclid the storefront stored on landing; orders
+    come from the `orders` table (same marks, saved at checkout). Volumes are
+    small (hundreds of rows a day), so grouping happens in Python — identical
+    on SQLite and Postgres, no JSON-path SQL."""
+    range_from, range_to = _resolve_window(period, custom_from, custom_to)
+
+    rows: dict[str, dict] = {}
+
+    def bucket(key: str, label: str, source, medium, campaign) -> dict:
+        if key not in rows:
+            rows[key] = {
+                "key": key, "label": label, "utm_source": source, "utm_medium": medium,
+                "utm_campaign": campaign, "sessions": set(), "orders": 0,
+                "custom_orders": 0, "revenue": 0.0,
+            }
+        return rows[key]
+
+    visits = db.execute(
+        select(AnalyticsEvent.session_id, AnalyticsEvent.data)
+        .where(AnalyticsEvent.type == AnalyticsType.visit)
+        .where(AnalyticsEvent.created_at >= range_from)
+        .where(AnalyticsEvent.created_at <= range_to)
+    ).all()
+    for session_id, data in visits:
+        d = data if isinstance(data, dict) else {}
+        key, label, s, m, c = _campaign_key(
+            _clean(d.get("utm_source")), _clean(d.get("utm_medium")), _clean(d.get("utm_campaign")),
+            _clean(d.get("yclid")), _clean(d.get("gclid")),
+        )
+        bucket(key, label, s, m, c)["sessions"].add(session_id or f"anon-{id(data)}")
+
+    orders = db.execute(
+        select(Order)
+        .options(selectinload(Order.items))
+        .where(Order.created_at >= range_from)
+        .where(Order.created_at <= range_to)
+    ).scalars().all()
+    for order in orders:
+        key, label, s, m, c = _campaign_key(
+            order.utm_source, order.utm_medium, order.utm_campaign, order.yclid, order.gclid
+        )
+        b = bucket(key, label, s, m, c)
+        b["orders"] += 1
+        if not order.items:
+            b["custom_orders"] += 1
+        b["revenue"] += float(order.total or 0)
+
+    out_rows: list[CampaignRowOut] = []
+    for b in rows.values():
+        visitors = len(b["sessions"])
+        out_rows.append(
+            CampaignRowOut(
+                key=b["key"], label=b["label"], utm_source=b["utm_source"],
+                utm_medium=b["utm_medium"], utm_campaign=b["utm_campaign"],
+                visitors=visitors, orders=b["orders"], custom_orders=b["custom_orders"],
+                revenue=round(b["revenue"], 2),
+                conversion_pct=round(b["orders"] / visitors * 100, 2) if visitors else 0.0,
+            )
+        )
+    # Campaigns with orders first, then by revenue, then by traffic.
+    out_rows.sort(key=lambda r: (r.orders, r.revenue, r.visitors), reverse=True)
+    best = next((r.key for r in out_rows if r.orders > 0 and r.key != _NO_MARKS_KEY), None)
+
+    return CampaignsOut(
+        rows=out_rows,
+        best_key=best,
+        total_visitors=sum(r.visitors for r in out_rows),
+        total_orders=sum(r.orders for r in out_rows),
+        total_revenue=round(sum(r.revenue for r in out_rows), 2),
         period=period,
         range_from=range_from,
         range_to=range_to,

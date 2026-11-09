@@ -62,6 +62,19 @@ class ChatMessageIn(BaseModel):
         return self
 
 
+class AttributionIn(BaseModel):
+    """First-touch ad attribution captured by the storefront on landing."""
+
+    utm_source: str | None = Field(default=None, max_length=255)
+    utm_medium: str | None = Field(default=None, max_length=255)
+    utm_campaign: str | None = Field(default=None, max_length=255)
+    utm_content: str | None = Field(default=None, max_length=255)
+    utm_term: str | None = Field(default=None, max_length=255)
+    yclid: str | None = Field(default=None, max_length=128)
+    gclid: str | None = Field(default=None, max_length=128)
+    landing_page: str | None = Field(default=None, max_length=500)
+
+
 class OrderCreateIn(BaseModel):
     customer_name: str = Field(min_length=1, max_length=255)
     customer_phone: str = Field(min_length=4, max_length=64)
@@ -83,6 +96,9 @@ class OrderCreateIn(BaseModel):
     # Anonymous visitor id so guest consents can be correlated with the
     # cookie-banner decision made in the same browser.
     request_id: str | None = Field(default=None, max_length=64)
+    # First-touch ad attribution captured by the storefront on landing. All
+    # optional; the per-campaign admin report groups real orders by these.
+    attribution: AttributionIn | None = None
 
 
 class OrderStatusUpdate(BaseModel):
@@ -103,6 +119,9 @@ class OrderOut(BaseModel):
     total: float
     status: OrderStatus
     archived: bool = False
+    utm_source: str | None = None
+    utm_campaign: str | None = None
+    yclid: str | None = None
     items: list[OrderItemOut]
     chat: list[ChatMessageOut]
     created_at: datetime

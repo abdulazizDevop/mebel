@@ -10,6 +10,14 @@ from app.database import get_db
 from app.deps import require_section
 from app.models import Category, ColorVariant, Product
 from app.schemas.product import ProductIn, ProductOut, ProductUpdate
+from app.services.slug_store import (
+    PRODUCT,
+    category_segment,
+    forget_slug,
+    remember_old_slug,
+    resolve_product_by_slug,
+    unique_product_slug,
+)
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -19,12 +27,16 @@ def _gen_sku() -> str:
 
 
 def _to_out(product: Product, db: Session) -> ProductOut:
-    cat_name: str | None = None
+    cat: Category | None = None
     if product.category_id is not None:
         cat = db.get(Category, product.category_id)
-        cat_name = cat.name if cat else None
+    # Rows created before the slug migration ran have NULL — never 500 on them.
+    if not product.slug:
+        product.slug = unique_product_slug(db, product.name, exclude_id=product.id)
+        db.commit()
     out = ProductOut.model_validate(product)
-    out.category_name = cat_name
+    out.category_name = cat.name if cat else None
+    out.category_slug = category_segment(cat)
     return out
 
 
@@ -86,6 +98,29 @@ def list_products(
     return out
 
 
+@router.get("/by-slug/{slug}", response_model=ProductOut)
+def get_product_by_slug(
+    slug: str,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+):
+    """Resolve `/catalog/<category>/<slug>`. Old slugs (renamed products) still
+    resolve; the response then carries the CURRENT slug and an
+    `X-Slug-Moved: 1` header so the caller can replace the URL (301 semantics)."""
+    product, moved = resolve_product_by_slug(db, slug)
+    if product is None:
+        raise HTTPException(status_code=404, detail="Product not found")
+    # Re-select with the gallery loaded (resolve() returns a bare row).
+    product = db.execute(
+        select(Product)
+        .options(selectinload(Product.color_variants))
+        .where(Product.id == product.id)
+    ).scalar_one()
+    if moved:
+        response.headers["X-Slug-Moved"] = "1"
+    return _to_out(product, db)
+
+
 @router.get("/{product_id}", response_model=ProductOut)
 def get_product(product_id: str, db: Annotated[Session, Depends(get_db)]):
     p = db.execute(
@@ -113,6 +148,7 @@ def create_product(payload: ProductIn, db: Annotated[Session, Depends(get_db)]):
 
     product = Product(
         name=payload.name.strip(),
+        slug=unique_product_slug(db, payload.name),
         sku=(payload.sku or _gen_sku()).strip(),
         price=payload.price,
         purchase_price=payload.purchase_price,
@@ -159,10 +195,19 @@ def update_product(
 
     data = payload.model_dump(exclude_unset=True)
     variants = data.pop("color_variants", None)
+    new_name = data.get("name")
     for k, v in data.items():
         setattr(product, k, v)
     if variants is not None:
         _replace_variants(product, payload.color_variants or [])
+
+    # Renamed → new slug, old one kept in slug_history so printed links live on.
+    if new_name is not None and new_name.strip():
+        candidate = unique_product_slug(db, new_name, exclude_id=product.id)
+        if candidate != product.slug:
+            remember_old_slug(db, PRODUCT, product.slug, product.id)
+            forget_slug(db, PRODUCT, candidate)  # A→B→A: take A back cleanly
+            product.slug = candidate
 
     try:
         db.commit()

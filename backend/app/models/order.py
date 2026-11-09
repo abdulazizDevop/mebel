@@ -44,6 +44,20 @@ class Order(Base):
     )
     # Admin can archive an order to hide it from the active list without deleting.
     archived: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="0", default=False)
+
+    # Ad attribution, first-touch: the storefront stores the UTM / click-id
+    # parameters of the visitor's first landing and sends them with the order.
+    # The per-campaign admin report joins REAL orders on these columns —
+    # never on Metrika, which only sees visitors who accepted analytics cookies.
+    utm_source: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    utm_medium: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    utm_campaign: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    utm_content: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    utm_term: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    yclid: Mapped[str | None] = mapped_column(String(128), nullable=True)  # Яндекс.Директ click id
+    gclid: Mapped[str | None] = mapped_column(String(128), nullable=True)  # Google Ads click id
+    landing_page: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, index=True)
 
     items: Mapped[list["OrderItem"]] = relationship(

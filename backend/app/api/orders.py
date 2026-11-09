@@ -101,12 +101,22 @@ def create_order(
     # Snapshot every line item from the canonical Product row so historical
     # finance numbers stay accurate even if the product is later edited or
     # deleted. Prices are read server-side; the client cannot tamper with them.
+    attr = payload.attribution
     order = Order(
         customer_id=customer.id if customer else None,
         customer_name=payload.customer_name.strip(),
         customer_phone=payload.customer_phone.strip(),
         status=OrderStatus.new,
         total=Decimal("0"),
+        # First-touch ad attribution (optional) — feeds the campaign report.
+        utm_source=attr.utm_source if attr else None,
+        utm_medium=attr.utm_medium if attr else None,
+        utm_campaign=attr.utm_campaign if attr else None,
+        utm_content=attr.utm_content if attr else None,
+        utm_term=attr.utm_term if attr else None,
+        yclid=attr.yclid if attr else None,
+        gclid=attr.gclid if attr else None,
+        landing_page=attr.landing_page if attr else None,
     )
 
     total = Decimal("0")

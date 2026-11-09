@@ -32,6 +32,36 @@ class TopProductOut(BaseModel):
     count: int
 
 
+class CampaignRowOut(BaseModel):
+    """One advertising source in the per-campaign report.
+
+    `visitors` = distinct browser sessions whose first landing carried these
+    UTM/click-id marks (from analytics_events). `orders` / `revenue` = REAL
+    orders rows carrying the same marks. The two are never mixed."""
+
+    key: str  # stable row id, e.g. "yandex|cpc|krovati"
+    label: str  # human label for the table
+    utm_source: str | None
+    utm_medium: str | None
+    utm_campaign: str | None
+    visitors: int
+    orders: int
+    custom_orders: int
+    revenue: float
+    conversion_pct: float  # orders / visitors * 100 (0 when no visitors)
+
+
+class CampaignsOut(BaseModel):
+    rows: list[CampaignRowOut]
+    best_key: str | None  # most orders, ties broken by revenue
+    total_visitors: int
+    total_orders: int
+    total_revenue: float
+    period: Literal["today", "week", "month", "custom"]
+    range_from: datetime
+    range_to: datetime
+
+
 class StatsOut(BaseModel):
     """Server-side aggregate stats for the admin Dashboard. Mirrors the
     field names emitted by the legacy frontend `getStats` so the UI can
