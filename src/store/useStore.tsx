@@ -258,6 +258,8 @@ interface StoreContextType {
   whatsappPhone: string;
   /** Phone number (digits only) for the "позвонить" tel: button. Empty = hidden. */
   callPhone: string;
+  /** «О компании» text for the home page (owner-editable in admin → SEO). */
+  homeIntro: string;
   /** Re-fetch the contact numbers from /config (after admin edits them). */
   refreshConfig: () => Promise<void>;
 
@@ -407,6 +409,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // WhatsApp + call numbers for the deep-link / tel buttons, served by the
   // backend /config so the owner can change them without a frontend rebuild.
   const [whatsappPhone, setWhatsappPhone] = useState('');
+  const [homeIntro, setHomeIntro] = useState(
+    'Rooomebel — мебель собственного производства в Дагестане: кровати, комоды, шкафы, тумбы и консоли по вашим размерам. Делаем на заказ, доставляем по Хасавюрту, Махачкале и всей республике.',
+  );
   const [callPhone, setCallPhone] = useState('');
 
   // Persist to localStorage
@@ -473,6 +478,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const c = await fetchPublicConfig();
       setWhatsappPhone(c.whatsapp_phone || '');
       setCallPhone(c.call_phone || '');
+      if (c.home_intro) setHomeIntro(c.home_intro);
     } catch {
       /* keep whatever we had */
     }
@@ -973,7 +979,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       recommendations, addRecommendation, updateRecommendation, removeRecommendation,
       customCategories: apiCategoryNames, addCategory, removeCategory, allCategories: allCategoriesList,
       categories: categoriesData,
-      whatsappPhone, callPhone, refreshConfig,
+      whatsappPhone, callPhone, homeIntro, refreshConfig,
       adminSession, setAdminSession, logoutAdmin,
       userSession, setUserSession, logoutUser, registeredUsers, registerUser, loginUser,
       deleteAccount, updateMarketingConsent,

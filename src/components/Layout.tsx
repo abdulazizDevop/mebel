@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Navbar } from './Navbar';
 import { Footer } from './Footer';
 import { BellToggle } from './BellToggle';
@@ -44,10 +45,11 @@ export function Layout({ children }: LayoutProps) {
         </>
       )}
       <header className="px-4 py-6 sm:p-8 flex justify-between items-center relative z-10">
-        <h1 className="text-xl sm:text-2xl tracking-tight font-bold !uppercase relative inline-block">
+        {/* Logo is a link, not an <h1>: each page owns its single h1 (SEO). */}
+        <Link to="/" aria-label="ROOOMEBEL — на главную" className="text-xl sm:text-2xl tracking-tight font-bold uppercase relative inline-block">
           Rooomebel
           <LogoUnderline />
-        </h1>
+        </Link>
         <div className="flex items-center gap-3 sm:gap-5">
           <div className="hidden sm:block text-sm opacity-50">Обретите покой</div>
           <BellToggle />

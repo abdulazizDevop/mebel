@@ -59,6 +59,8 @@ export interface PublicConfigDTO {
   whatsapp_phone: string;
   call_phone: string;
   legal_versions?: Record<string, string>;
+  /** «О компании» paragraph for the home page (admin → SEO settings). */
+  home_intro?: string;
 }
 
 export interface TokenResponse {

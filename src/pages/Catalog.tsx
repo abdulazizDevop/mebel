@@ -676,10 +676,19 @@ export function Catalog() {
         </div>
 
         {/* Active category title with falling letters */}
-        <div className="h-10 flex items-center">
-          <h3 className="text-2xl font-bold tracking-tight">
-            <FallingTitle text={activeCategory} />
-          </h3>
+        <div className="min-h-10 flex flex-col justify-center">
+          <h1 className="text-2xl font-bold tracking-tight">
+            <FallingTitle text={activeCategory === 'Все' ? 'Каталог' : activeCategory} />
+          </h1>
+          {/* One line of real text per section — what search engines and
+              the server renderer show for this URL. */}
+          <p className="text-xs opacity-50 mt-1">
+            {isCustomOrder
+              ? 'Изготовим мебель по вашим размерам и эскизу. Собственное производство в Хасавюрте, доставка по Дагестану.'
+              : matched
+                ? `${matched.name} от производителя Rooomebel: любые размеры и цвета, изготовление в Хасавюрте, доставка по Дагестану.`
+                : 'Вся мебель Rooomebel: собственное производство в Дагестане, изготовление по вашим размерам, доставка по республике.'}
+          </p>
         </div>
 
         {/* Category pills — separate scrollable row */}

@@ -70,8 +70,12 @@ def inject(shell: str, page: Page, seo: dict[str, str]) -> str:
     return out
 
 
-@router.get("/_render/{path:path}", response_class=HTMLResponse, include_in_schema=False)
+@router.api_route("/_render/{path:path}", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
 def render_page(path: str, request: Request, db: Annotated[Session, Depends(get_db)]) -> Response:
+    # One URL per page: `/catalog/` → `/catalog` (keeps duplicates out of the index).
+    if path.endswith("/") and path.strip("/"):
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(url="/" + path.strip("/") + query, status_code=301)
     page = build_page(db, path)
     if page.redirect:
         query = f"?{request.url.query}" if request.url.query else ""

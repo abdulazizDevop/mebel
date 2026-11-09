@@ -6,7 +6,7 @@ import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
 import { productWhatsappMessage } from '../utils/whatsapp';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
-import { productPath } from '../utils/paths';
+import { CUSTOM_ORDER_LABEL, CUSTOM_ORDER_PATH, categoryPath, productPath } from '../utils/paths';
 import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 function getPositionClass(offset: number, total: number): string {
@@ -37,7 +37,7 @@ function getStyle(pos: string, mobile: boolean) {
 }
 
 export function Home() {
-  const { allProducts, addToCart, whatsappPhone, callPhone } = useStore();
+  const { allProducts, addToCart, whatsappPhone, callPhone, homeIntro, categories } = useStore();
   useDocumentMeta({
     title: `${SITE_NAME} — мебель на заказ в Дагестане: кровати, комоды, шкафы от производителя`,
     description: 'Rooomebel — мебель собственного производства в Дагестане: кровати, комоды, шкафы, тумбы и консоли по вашим размерам. Доставка по Хасавюрту, Махачкале и всей республике.',
@@ -156,7 +156,8 @@ export function Home() {
       </svg>
 
       {/* Big liquid gradient title — ROOOMEBEL with typing effect */}
-      <motion.h1
+      <motion.div
+        role="presentation"
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-[2.25rem] sm:text-[3.5rem] md:text-[7rem] font-black tracking-tight !uppercase text-center pointer-events-none select-none leading-none mb-2 animate-title-gradient"
@@ -183,7 +184,7 @@ export function Home() {
           }} />
         )}
         <span className="invisible">{titleText.slice(typedCount)}</span>
-      </motion.h1>
+      </motion.div>
 
       {/* 3D Carousel */}
       <div
@@ -317,6 +318,26 @@ export function Home() {
           Подробнее →
         </Link>
       </motion.div>
+
+      {/* «О компании» + разделы — the same text the server renderer sends to
+          search engines, so the rendered SPA keeps it (Google indexes the
+          rendered DOM). Editable in admin → SEO. */}
+      <section className="w-full max-w-2xl mx-auto mt-14 text-center px-2">
+        <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-3">Мебель на заказ в Дагестане</h1>
+        <p className="text-sm md:text-base opacity-70 leading-relaxed">{homeIntro}</p>
+        {categories.length > 0 && (
+          <nav aria-label="Разделы каталога" className="flex flex-wrap justify-center gap-2 mt-5">
+            {categories.map((c) => (
+              <Link key={c.id} to={categoryPath(c.slug)} className="px-4 py-2 rounded-full border border-primary/10 text-sm hover:bg-primary/5 transition-colors">
+                {c.name}
+              </Link>
+            ))}
+            <Link to={CUSTOM_ORDER_PATH} className="px-4 py-2 rounded-full border border-primary/10 text-sm hover:bg-primary/5 transition-colors">
+              {CUSTOM_ORDER_LABEL}
+            </Link>
+          </nav>
+        )}
+      </section>
     </div>
   );
 }

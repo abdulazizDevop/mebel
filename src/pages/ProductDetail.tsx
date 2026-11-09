@@ -268,9 +268,9 @@ export function ProductDetail() {
       >
         {/* Name */}
         <div className="mb-4">
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight leading-tight">
             {product.name}
-          </h2>
+          </h1>
         </div>
 
         {/* Description with toggle */}

@@ -27,7 +27,8 @@ from app.database import get_db
 from app.legal import DOCUMENT_VERSIONS
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 from app.seo import render as seo_router
-from app.services.settings_store import get_contact_config
+from app.seo.site import DEFAULT_HOME_INTRO
+from app.services.settings_store import get_contact_config, get_setting
 from fastapi import Depends
 from sqlalchemy.orm import Session
 
@@ -118,6 +119,9 @@ def public_config(db: Session = Depends(get_db)) -> dict:
     each legal document the user accepted."""
     cfg: dict = dict(get_contact_config(db))
     cfg["legal_versions"] = dict(DOCUMENT_VERSIONS)
+    # Owner-editable «о компании» paragraph (admin → SEO); the SPA shows the
+    # same text the server renderer puts on the home page.
+    cfg["home_intro"] = get_setting(db, "seo_home_intro", "") or DEFAULT_HOME_INTRO
     return cfg
 
 
