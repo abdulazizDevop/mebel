@@ -10,6 +10,7 @@ import { productWhatsappMessage } from '../utils/whatsapp';
 import { dtoToProduct, getProductBySlug as apiGetProductBySlug } from '../api';
 import type { Product } from '../data/products';
 import { productPath } from '../utils/paths';
+import { SITE_NAME, formatPrice, useDocumentMeta } from '../seo/useDocumentMeta';
 
 export function ProductDetail() {
   // Route: /catalog/:categorySlug/:productSlug — the product is looked up by
@@ -61,6 +62,18 @@ export function ProductDetail() {
 
   const product = fullProduct || products.find((p) => p.slug === productSlug);
   const isFavorite = product ? isFav(product.id) : false;
+
+  // Mirrors the server renderer's title/description so SPA navigation keeps
+  // the tab title, Метрика page titles and share dialogs correct.
+  useDocumentMeta(
+    product
+      ? {
+          title: `${product.name} — купить в Дагестане за ${formatPrice(product.price)} ₽ | ${SITE_NAME}`,
+          description: `${product.name} за ${formatPrice(product.price)} ₽ от производителя Rooomebel. ${product.description || ''} Изготовим по вашим размерам, доставка по Дагестану.`.slice(0, 160),
+          canonicalPath: productPath(product),
+        }
+      : null,
+  );
 
   useEffect(() => {
     if (product) trackEvent({ type: 'product_view', productId: product.id });

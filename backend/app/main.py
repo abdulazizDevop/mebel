@@ -26,6 +26,7 @@ from app.config import get_settings
 from app.database import get_db
 from app.legal import DOCUMENT_VERSIONS
 from app.rate_limit import limiter, rate_limit_exceeded_handler
+from app.seo import render as seo_router
 from app.services.settings_store import get_contact_config
 from fastapi import Depends
 from sqlalchemy.orm import Session
@@ -132,6 +133,7 @@ app.include_router(push_router.router)
 app.include_router(settings_router.router)
 app.include_router(uploads_router.router)
 app.include_router(ws_chat_router.router)
+app.include_router(seo_router.router)  # /_render/*, /sitemap.xml, /robots.txt
 
 # Local-disk fallback for dev image uploads. In production with S3 configured
 # this directory stays empty and the route is harmless.

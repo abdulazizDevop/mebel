@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { OrderAccepted } from '../components/OrderAccepted';
+import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 /* /order/success/:id — «Заказ успешно отправлен». A page of its own so the
  * success state has a URL (Метрика shows it as a step; the customer can
@@ -11,6 +12,7 @@ export function OrderSuccess() {
   const navigate = useNavigate();
   const { orders, setActiveOrderId } = useStore();
   const order = orders.find((o) => o.id === id);
+  useDocumentMeta({ title: `Заказ отправлен | ${SITE_NAME}`, canonicalPath: '/order', robots: 'noindex, nofollow' });
 
   const lines = order?.items.map((i) => ({ name: i.product.name, qty: i.qty, price: i.product.price })) ?? [];
   const isCustom = !!order && order.items.length === 0;

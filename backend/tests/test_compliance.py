@@ -73,7 +73,8 @@ def test_03_consent_defaults_to_false(client):
     # Frontend: every consent state is initialised with `useState(false)`.
     for rel, states in {
         "pages/Profile.tsx": ["personalDataConsent", "marketingOptIn"],
-        "components/CartSidebar.tsx": ["termsAccepted", "marketingConsent"],
+        # Checkout form moved from the cart drawer to its own page (SEO stage 1).
+        "pages/Order.tsx": ["termsAccepted", "marketingConsent"],
         "pages/Catalog.tsx": ["personalDataConsent", "termsAccepted", "marketingConsent"],
     }.items():
         text = (SRC / rel).read_text(encoding="utf-8")

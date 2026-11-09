@@ -1,0 +1,39 @@
+{# Server-rendered first paint. React replaces this on load, so keep it plain,
+   semantic and built from Tailwind classes that exist in the real bundle. #}
+<div class="min-h-screen pb-32 relative" data-ssr="1">
+  <header class="px-4 py-6 sm:p-8 flex justify-between items-center">
+    <a href="/" class="text-xl sm:text-2xl tracking-tight font-bold uppercase">{{ site_name }}</a>
+    <a href="tel:+{{ phone_digits }}" class="text-sm font-bold">{{ phone_display }}</a>
+  </header>
+  <main class="px-4 sm:px-6 md:px-12 lg:px-24">
+    {% if crumbs %}
+    <nav aria-label="Хлебные крошки" class="text-xs opacity-60 mb-4">
+      {% for name, href in crumbs %}
+        {% if not loop.last %}<a href="{{ href }}">{{ name }}</a> › {% else %}<span>{{ name }}</span>{% endif %}
+      {% endfor %}
+    </nav>
+    {% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="mt-16 px-4 sm:px-6 md:px-12 lg:px-24 pb-2 text-sm">
+    <div class="border-t border-primary/10 pt-8 grid gap-8 md:grid-cols-2">
+      <div class="space-y-1.5">
+        <p class="font-semibold tracking-tight uppercase">{{ site_name }}</p>
+        <p class="opacity-70">Мебель собственного производства, {{ city }}, {{ region }}</p>
+        <p class="pt-2">{{ operator_name }}</p>
+        <p>ИНН: {{ operator_inn }}</p>
+        <p>Адрес: {{ address }}</p>
+        <p>Телефон: <a href="tel:+{{ phone_digits }}">{{ phone_display }}</a></p>
+        <p>E-mail: <a href="mailto:{{ operator_email }}">{{ operator_email }}</a></p>
+      </div>
+      <nav aria-label="Разделы каталога" class="space-y-1.5">
+        <p class="font-semibold">Каталог</p>
+        {% for name, href in categories %}<a class="block" href="{{ href }}">{{ name }}</a>{% endfor %}
+        <a class="block" href="{{ custom_order_path }}">Индивидуальный заказ</a>
+      </nav>
+    </div>
+    <nav aria-label="Документы" class="mt-6 space-y-1 text-xs opacity-70">
+      {% for slug, title in legal_pages.items() %}<a class="block" href="/{{ slug }}">{{ title }}</a>{% endfor %}
+    </nav>
+  </footer>
+</div>

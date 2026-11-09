@@ -1,0 +1,29 @@
+{% extends "_layout.html" %}
+{% block content %}
+<article class="max-w-lg mx-auto">
+  <div class="aspect-square rounded-2xl overflow-hidden mb-4 bg-surface">
+    <img src="{{ product.main_image }}" alt="{{ product.name }} — купить в Дагестане, {{ site_name }}" class="w-full h-full object-cover" />
+  </div>
+  {% if photos|length > 1 %}
+  <div class="flex gap-3 overflow-x-auto mb-6">
+    {% for src in photos[1:] %}<img src="{{ src }}" alt="{{ product.name }}, фото {{ loop.index + 1 }}" loading="lazy" decoding="async" class="w-11 h-11 rounded-full object-cover" />{% endfor %}
+  </div>
+  {% endif %}
+  <h1 class="text-2xl md:text-3xl font-bold tracking-tight leading-tight mb-2">{{ product.name }}</h1>
+  <p class="text-2xl font-bold mb-4">{{ price(product.price) }} ₽</p>
+  {% if product.description %}<p class="text-sm opacity-70 leading-relaxed mb-4">{{ product.description }}</p>{% endif %}
+  {% if specs %}
+  <dl class="grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm mb-6">
+    {% for label, value in specs %}<dt class="opacity-50">{{ label }}</dt><dd class="font-bold text-right">{{ value }}</dd>{% endfor %}
+  </dl>
+  {% endif %}
+  <p class="text-sm opacity-70 mb-6">
+    Изготовим в любом размере и цвете. Производство — {{ city }}, доставка по {{ region }}у и соседним регионам.
+    {% if category %}Другие модели: <a href="{{ crumbs[-2][1] }}" class="underline">{{ category.name }}</a>.{% endif %}
+  </p>
+  <div class="flex flex-col gap-2">
+    <a href="https://wa.me/{{ whatsapp_digits }}?text={{ ('Здравствуйте! Интересует ' ~ product.name ~ ' за ' ~ price(product.price) ~ ' ₽') | urlencode }}" rel="noopener" class="rounded-full py-3 text-center font-bold border-2 border-[#25D366] text-[#25D366]">Написать в WhatsApp</a>
+    <a href="tel:+{{ phone_digits }}" class="rounded-full py-3 text-center text-sm">Или позвонить: <b>{{ phone_display }}</b></a>
+  </div>
+</article>
+{% endblock %}

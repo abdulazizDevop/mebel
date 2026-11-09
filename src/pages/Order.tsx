@@ -7,6 +7,7 @@ import { cn } from '../utils/cn';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
 import { CONSENT_ERRORS, ConsentCheckbox, MarketingConsentText, TermsConsentText } from '../components/ConsentCheckbox';
 import { orderSuccessPath, productPath } from '../utils/paths';
+import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 /* /order — the checkout page. Used to live inside the cart drawer; a page of
  * its own gives Метрика/Директ a clean step (cart → /order → /order/success)
@@ -16,6 +17,7 @@ import { orderSuccessPath, productPath } from '../utils/paths';
 export function Order() {
   const { cart, placeOrder, userSession } = useStore();
   const navigate = useNavigate();
+  useDocumentMeta({ title: `Оформление заказа | ${SITE_NAME}`, canonicalPath: '/order', robots: 'noindex, nofollow' });
 
   const [name, setName] = useState(userSession?.name || '');
   const [phone, setPhone] = useState('');

@@ -19,5 +19,10 @@ export function productPath(p: Pick<Product, 'id' | 'slug' | 'categorySlug'>): s
   return `/catalog/${encodeURIComponent(p.categorySlug || UNCATEGORIZED_SEGMENT)}/${encodeURIComponent(p.slug)}`;
 }
 
+/** Reserved category segment for the custom-order form (mirrors backend CUSTOM_ORDER_SEGMENT). */
+export const CUSTOM_ORDER_SLUG = 'individualnyy-zakaz';
+export const CUSTOM_ORDER_PATH = `/catalog/${CUSTOM_ORDER_SLUG}`;
+export const CUSTOM_ORDER_LABEL = 'Индивидуальный заказ';
+
 export const ORDER_PATH = '/order';
 export const orderSuccessPath = (orderId: string) => `/order/success/${orderId}`;

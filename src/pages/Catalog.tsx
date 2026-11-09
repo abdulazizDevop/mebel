@@ -14,8 +14,9 @@ import {
   PersonalDataConsentText,
   TermsConsentText,
 } from '../components/ConsentCheckbox';
-import { categoryPath, orderSuccessPath, productPath } from '../utils/paths';
+import { CUSTOM_ORDER_LABEL, CUSTOM_ORDER_PATH, CUSTOM_ORDER_SLUG, categoryPath, orderSuccessPath, productPath } from '../utils/paths';
 import { getCategoryBySlug } from '../api';
+import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 // categoryList is now built dynamically inside the component
 
@@ -324,28 +325,58 @@ export function Catalog() {
   const { addToCart, allProducts: products, recommendations, allCategories: storeCats, categories } = useStore();
   const { categorySlug } = useParams<{ categorySlug?: string }>();
   const navigate = useNavigate();
-  const categoryList = storeCats.map((cat) => ({ key: cat, label: cat }));
+  // Custom-order form is a permanent pill with its own URL — no longer tied
+  // to a DB category literally named «Индивидуальные заказы».
+  const categoryList = [
+    ...storeCats.filter((c) => c !== 'Индивидуальные заказы').map((cat) => ({ key: cat, label: cat })),
+    { key: CUSTOM_ORDER_LABEL, label: CUSTOM_ORDER_LABEL },
+  ];
   const [showOrderToast, setShowOrderToast] = useState(false);
 
   // The active category lives in the URL (/catalog/<slug>) so every section
   // has a shareable, indexable address. An unknown slug is resolved through
   // the API (renamed category → its new slug) or falls back to the full list.
-  const matched = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
-  const activeCategory = categorySlug ? (matched?.name ?? 'Все') : 'Все';
+  const isCustomOrder = categorySlug === CUSTOM_ORDER_SLUG;
+  const matched = categorySlug && !isCustomOrder ? categories.find((c) => c.slug === categorySlug) : undefined;
+  const activeCategory = isCustomOrder ? CUSTOM_ORDER_LABEL : categorySlug ? (matched?.name ?? 'Все') : 'Все';
   useEffect(() => {
-    if (!categorySlug || matched || categories.length === 0) return;
+    if (!categorySlug || isCustomOrder || matched || categories.length === 0) return;
     getCategoryBySlug(categorySlug)
       .then((dto) => navigate(categoryPath(dto.slug), { replace: true }))
       .catch(() => navigate('/catalog', { replace: true }));
-  }, [categorySlug, matched, categories.length, navigate]);
+  }, [categorySlug, isCustomOrder, matched, categories.length, navigate]);
   const setActiveCategory = (name: string) => {
     if (name === 'Все') {
       navigate('/catalog');
       return;
     }
+    if (name === CUSTOM_ORDER_LABEL) {
+      navigate(CUSTOM_ORDER_PATH);
+      return;
+    }
     const cat = categories.find((c) => c.name === name);
     navigate(cat ? categoryPath(cat.slug) : '/catalog');
   };
+
+  useDocumentMeta(
+    isCustomOrder
+      ? {
+          title: `Мебель по индивидуальным размерам на заказ в Дагестане | ${SITE_NAME}`,
+          description: 'Изготовим кровать, шкаф, комод или кухню по вашим размерам. Собственное производство в Хасавюрте, доставка по Дагестану.',
+          canonicalPath: CUSTOM_ORDER_PATH,
+        }
+      : matched
+        ? {
+            title: `${matched.name} на заказ в Дагестане — купить от производителя | ${SITE_NAME}`,
+            description: `${matched.name} от производителя Rooomebel: любые размеры и цвета, изготовление в Хасавюрте, доставка по Дагестану.`,
+            canonicalPath: categoryPath(matched.slug),
+          }
+        : {
+            title: `Каталог мебели на заказ в Дагестане — ${SITE_NAME}, Хасавюрт`,
+            description: 'Вся мебель Rooomebel: кровати, комоды, шкафы, тумбы, консоли. Собственное производство в Дагестане, изготовление по вашим размерам.',
+            canonicalPath: '/catalog',
+          },
+  );
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'none' | 'asc' | 'desc'>('none');
@@ -671,7 +702,7 @@ export function Catalog() {
       </div>
 
       {/* Product grid or Custom Order Form */}
-      {activeCategory === 'Индивидуальные заказы' ? (
+      {activeCategory === CUSTOM_ORDER_LABEL ? (
         <CustomOrderForm />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

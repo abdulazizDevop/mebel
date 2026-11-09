@@ -1,0 +1,25 @@
+{% extends "_layout.html" %}
+{% from "_cards.html" import product_grid with context %}
+{% block content %}
+<section class="mb-10">
+  <h1 class="text-3xl sm:text-5xl font-bold tracking-tight mb-3">Мебель на заказ в Дагестане</h1>
+  <p class="text-base opacity-70 max-w-2xl">{{ intro }}</p>
+  <div class="flex flex-wrap gap-2 mt-5">
+    <a href="/catalog" class="bg-primary text-primary-inv rounded-full px-6 py-3 text-sm font-bold">Смотреть каталог</a>
+    <a href="https://wa.me/{{ whatsapp_digits }}" rel="noopener" class="rounded-full px-6 py-3 text-sm font-bold border border-primary/10">Написать в WhatsApp</a>
+  </div>
+</section>
+<section class="mb-10">
+  <h2 class="text-2xl font-bold mb-4">Разделы каталога</h2>
+  <ul class="flex flex-wrap gap-2">
+    {% for name, href in categories %}<li><a href="{{ href }}" class="px-4 py-2 rounded-full border border-primary/10 text-sm">{{ name }}</a></li>{% endfor %}
+    <li><a href="{{ custom_order_path }}" class="px-4 py-2 rounded-full border border-primary/10 text-sm">Индивидуальный заказ</a></li>
+  </ul>
+</section>
+{% if cards %}
+<section>
+  <h2 class="text-2xl font-bold mb-4">Новинки</h2>
+  {{ product_grid(cards) }}
+</section>
+{% endif %}
+{% endblock %}

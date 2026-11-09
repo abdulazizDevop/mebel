@@ -7,6 +7,7 @@ import { productWhatsappMessage } from '../utils/whatsapp';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
 import { productPath } from '../utils/paths';
+import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 function getPositionClass(offset: number, total: number): string {
   if (offset === 0) return 'center';
@@ -37,6 +38,11 @@ function getStyle(pos: string, mobile: boolean) {
 
 export function Home() {
   const { allProducts, addToCart, whatsappPhone, callPhone } = useStore();
+  useDocumentMeta({
+    title: `${SITE_NAME} — мебель на заказ в Дагестане: кровати, комоды, шкафы от производителя`,
+    description: 'Rooomebel — мебель собственного производства в Дагестане: кровати, комоды, шкафы, тумбы и консоли по вашим размерам. Доставка по Хасавюрту, Махачкале и всей республике.',
+    canonicalPath: '/',
+  });
   // Pull the carousel from the live, API-backed catalog so the home page
   // reflects whatever the admin has uploaded — not the static seed file.
   const carouselItems = useMemo(() => allProducts.slice(0, 8), [allProducts]);

@@ -1,0 +1,15 @@
+{% extends "_layout.html" %}
+{% block content %}
+<article class="max-w-lg mx-auto">
+  <h1 class="text-2xl sm:text-4xl font-bold tracking-tight mb-3">Мебель по индивидуальным размерам</h1>
+  <p class="text-sm opacity-70 mb-4">{{ description }}</p>
+  <ul class="text-sm space-y-2 mb-6">
+    <li>• Кровати, шкафы, комоды, тумбы, консоли, кухонные гарнитуры — любые размеры и цвета.</li>
+    <li>• Бесплатный расчёт стоимости по вашим размерам и фото.</li>
+    <li>• Собственное производство в {{ city }}е, доставка по {{ region }}у.</li>
+  </ul>
+  <p class="text-sm">Оставьте заявку на сайте или напишите нам:
+    <a href="https://wa.me/{{ whatsapp_digits }}" rel="noopener" class="underline">WhatsApp</a>,
+    <a href="tel:+{{ phone_digits }}" class="underline">{{ phone_display }}</a>.</p>
+</article>
+{% endblock %}

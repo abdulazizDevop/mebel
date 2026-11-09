@@ -25,7 +25,9 @@ _NON_SLUG = re.compile(r"[^a-z0-9]+")
 
 # Category slugs a real category must never take: `tovary` is the pseudo
 # category used in product URLs when the product has no category.
-RESERVED_CATEGORY_SLUGS = frozenset({"tovary", "catalog", "order", "admin", "chat", "profile"})
+RESERVED_CATEGORY_SLUGS = frozenset(
+    {"tovary", "catalog", "order", "admin", "chat", "profile", CUSTOM_ORDER_SEGMENT := "individualnyy-zakaz"}
+)
 
 
 def transliterate(text: str) -> str:

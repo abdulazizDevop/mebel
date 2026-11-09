@@ -6,7 +6,7 @@ import {
   Edit3, X, Save, Check, Settings, Upload, Camera,
   Pipette, BarChart3, Users, ShoppingCart, Heart, Eye, Calendar,
   Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound,
-  Crown, Phone, ImagePlus, Archive, ArchiveRestore, Megaphone
+  Crown, Phone, ImagePlus, Archive, ArchiveRestore, Megaphone, Globe
 } from 'lucide-react';
 import { useStore, Order, RecommendationCategory, ALL_SECTIONS } from '../store/useStore';
 import { Product } from '../data/products';
@@ -17,6 +17,8 @@ import {
   deleteAdminUser as apiDeleteAdminUser,
   getContactSettings,
   updateContactSettings,
+  getSeoSettings,
+  updateSeoSettings,
   dtoToChatMessage,
   dtoToProduct,
   fetchCampaignStats,
@@ -30,7 +32,7 @@ import {
   uploadImage,
   useOrderChatSocket,
 } from '../api';
-import type { AdminUser, CampaignsDTO, StatsDTO } from '../api';
+import type { AdminUser, CampaignsDTO, SeoSettings, StatsDTO } from '../api';
 import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
 
 /* ═══════════════════════════════════════════════════
@@ -273,6 +275,123 @@ function ContactSettingsCard() {
             )}
           >
             {saved ? <><Check size={16} /> Сохранено!</> : <><Save size={16} /> {saving ? 'Сохранение…' : 'Сохранить номера'}</>}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   SeoSettingsCard — search-engine verification tokens, home intro, address,
+   hours, socials. Read by the server renderer (backend/app/seo) on every page.
+   ═══════════════════════════════════════════════════ */
+const SEO_EMPTY: SeoSettings = {
+  seo_yandex_verification: '', seo_google_verification: '', seo_home_intro: '',
+  seo_street_address: '', seo_locality: '', seo_opening_hours: '', seo_geo: '', seo_social_links: '',
+};
+
+function SeoSettingsCard() {
+  const [form, setForm] = useState<SeoSettings>(SEO_EMPTY);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    getSeoSettings()
+      .then((s) => setForm({ ...SEO_EMPTY, ...s }))
+      .catch(() => setError('Не удалось загрузить SEO-настройки'))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const set = (key: keyof SeoSettings) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const save = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      const s = await updateSeoSettings(form);
+      setForm({ ...SEO_EMPTY, ...s });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setError('Не удалось сохранить');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    'w-full bg-background rounded-2xl px-5 py-3 border border-primary/5 focus:ring-2 focus:ring-primary outline-none text-sm';
+  const label = (text: string, hint?: string) => (
+    <label className="text-xs font-bold opacity-50 mb-1 block px-1">
+      {text}
+      {hint && <span className="font-normal opacity-70"> — {hint}</span>}
+    </label>
+  );
+
+  return (
+    <div className="bg-surface rounded-3xl shadow-sm p-6 mb-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Globe size={18} className="opacity-40" />
+        <h3 className="font-bold">SEO и поиск (Яндекс / Google)</h3>
+      </div>
+      <p className="text-xs opacity-50 mb-4">
+        Коды подтверждения из Яндекс.Вебмастера и Google Search Console, текст для главной и данные
+        организации для карточки в поиске. Применяется сразу, без перевыпуска сайта.
+      </p>
+      {loading ? (
+        <p className="text-sm opacity-40">Загрузка…</p>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              {label('Яндекс.Вебмастер', 'код из метатега yandex-verification')}
+              <input value={form.seo_yandex_verification} onChange={set('seo_yandex_verification')} placeholder="например 1a2b3c4d5e6f" className={inputCls} />
+            </div>
+            <div>
+              {label('Google Search Console', 'код из метатега google-site-verification')}
+              <input value={form.seo_google_verification} onChange={set('seo_google_verification')} placeholder="например AbCdEf…" className={inputCls} />
+            </div>
+          </div>
+          <div>
+            {label('Текст о компании на главной', '2–3 предложения, виден поисковикам')}
+            <textarea value={form.seo_home_intro} onChange={set('seo_home_intro')} rows={3} maxLength={600} className={cn(inputCls, 'rounded-2xl resize-y')} placeholder="Rooomebel — мебель собственного производства в Дагестане…" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              {label('Улица, дом', 'адрес производства / шоурума')}
+              <input value={form.seo_street_address} onChange={set('seo_street_address')} placeholder="квартал Первая Дача" className={inputCls} />
+            </div>
+            <div>
+              {label('Населённый пункт')}
+              <input value={form.seo_locality} onChange={set('seo_locality')} placeholder="Хасавюртовский район" className={inputCls} />
+            </div>
+            <div>
+              {label('Часы работы', 'например Mo-Sa 09:00-19:00')}
+              <input value={form.seo_opening_hours} onChange={set('seo_opening_hours')} placeholder="Mo-Sa 09:00-19:00" className={inputCls} />
+            </div>
+            <div>
+              {label('Координаты', 'широта,долгота с Яндекс.Карт')}
+              <input value={form.seo_geo} onChange={set('seo_geo')} placeholder="43.2505,46.5856" className={inputCls} />
+            </div>
+          </div>
+          <div>
+            {label('Соцсети', 'по одной ссылке в строке')}
+            <textarea value={form.seo_social_links} onChange={set('seo_social_links')} rows={2} className={cn(inputCls, 'rounded-2xl resize-y')} placeholder={'https://t.me/…\nhttps://instagram.com/…'} />
+          </div>
+          {error && <p className="text-xs text-red-500 px-1">{error}</p>}
+          <button
+            onClick={save}
+            disabled={saving}
+            className={cn(
+              'w-full rounded-full py-3 font-bold text-sm flex items-center justify-center gap-2 transition-all',
+              saved ? 'bg-green-600 text-white' : 'bg-primary text-primary-inv hover:scale-[1.02] active:scale-[0.98] disabled:opacity-30 disabled:scale-100',
+            )}
+          >
+            {saved ? <><Check size={16} /> Сохранено!</> : <><Save size={16} /> {saving ? 'Сохранение…' : 'Сохранить SEO-настройки'}</>}
           </button>
         </div>
       )}
@@ -1865,6 +1984,7 @@ export function Admin() {
             className="overflow-hidden mb-6"
           >
             <ContactSettingsCard />
+            <SeoSettingsCard />
             <div className="bg-surface rounded-3xl shadow-sm p-6">
               <div className="flex items-center gap-2 mb-4">
                 <KeyRound size={18} className="opacity-40" />

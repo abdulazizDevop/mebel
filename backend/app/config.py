@@ -56,6 +56,16 @@ class Settings(BaseSettings):
     # 79280484048. Empty hides the call line.
     call_phone: str = ""
 
+    # ── SEO renderer (app/seo) ──────────────────────────────────────────
+    # Absolute origin used for canonical URLs, OG tags, sitemap and JSON-LD.
+    public_site_url: str = "https://rooomebel.ru"
+    # Where to fetch the built SPA shell (Vite's index.html with the hashed
+    # asset tags). In docker-compose the `web` nginx serves it; the renderer
+    # injects title/meta/JSON-LD and server-rendered content into that shell.
+    web_shell_url: str = "http://web:80/index.html"
+    # Local fallback for dev/tests (a `vite build` output). Empty = ../dist.
+    web_shell_path: str = ""
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

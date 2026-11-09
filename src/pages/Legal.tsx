@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Cookie } from 'lucide-react';
-import { LEGAL_SLUGS, legalDocuments, type LegalBlock, type LegalSlug } from '../legal/documents';
+import { LEGAL_SLUGS, OPERATOR, legalDocuments, type LegalBlock, type LegalSlug } from '../legal/documents';
 import { openCookieSettings } from '../consent/cookieConsent';
+import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
 function Block({ block }: { block: LegalBlock }) {
   switch (block.t) {
@@ -71,13 +71,11 @@ function Block({ block }: { block: LegalBlock }) {
 export function LegalPage({ slug }: { slug: LegalSlug }) {
   const doc = legalDocuments[slug];
 
-  useEffect(() => {
-    const prev = document.title;
-    document.title = `${doc.title} — Rooomebel`;
-    return () => {
-      document.title = prev;
-    };
-  }, [doc]);
+  useDocumentMeta({
+    title: `${doc.title} | ${SITE_NAME}`,
+    description: `${doc.title}. Rooomebel, ${OPERATOR.name}, ИНН ${OPERATOR.inn}, ${OPERATOR.address}.`,
+    canonicalPath: `/${slug}`,
+  });
 
   return (
     <article id="contacts" className="max-w-3xl mx-auto py-4 sm:py-8 text-[15px]">

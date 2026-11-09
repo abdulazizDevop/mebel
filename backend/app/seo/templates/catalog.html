@@ -1,0 +1,18 @@
+{% extends "_layout.html" %}
+{% from "_cards.html" import product_grid with context %}
+{% block content %}
+<h1 class="text-2xl sm:text-4xl font-bold tracking-tight mb-2">{{ h1 }}</h1>
+<p class="text-sm opacity-70 mb-6 max-w-2xl">{{ description }}</p>
+<nav aria-label="Категории" class="flex flex-wrap gap-2 mb-8">
+  <a href="/catalog" class="px-4 py-2 rounded-full border border-primary/10 text-sm{% if active_path == '/catalog' %} bg-primary text-primary-inv{% endif %}">Все</a>
+  {% for name, href in categories %}
+  <a href="{{ href }}" class="px-4 py-2 rounded-full border border-primary/10 text-sm{% if href == active_path %} bg-primary text-primary-inv{% endif %}">{{ name }}</a>
+  {% endfor %}
+  <a href="{{ custom_order_path }}" class="px-4 py-2 rounded-full border border-primary/10 text-sm">Индивидуальный заказ</a>
+</nav>
+{% if cards %}
+{{ product_grid(cards) }}
+{% else %}
+<p class="opacity-60">В этом разделе пока нет товаров. Напишите нам — изготовим по вашим размерам.</p>
+{% endif %}
+{% endblock %}

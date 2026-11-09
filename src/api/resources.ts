@@ -210,6 +210,21 @@ export const getContactSettings = () =>
 export const updateContactSettings = (input: ContactSettings) =>
   api.put<ContactSettings>('/admin/settings/contact', input, { tokenSlot: 'admin' });
 
+/* ─── Admin: SEO settings (verification tokens, intro, address, socials) ─── */
+export interface SeoSettings {
+  seo_yandex_verification: string;
+  seo_google_verification: string;
+  seo_home_intro: string;
+  seo_street_address: string;
+  seo_locality: string;
+  seo_opening_hours: string;
+  seo_geo: string;
+  seo_social_links: string;
+}
+export const getSeoSettings = () => api.get<SeoSettings>('/admin/settings/seo', { tokenSlot: 'admin' });
+export const updateSeoSettings = (input: SeoSettings) =>
+  api.put<SeoSettings>('/admin/settings/seo', input, { tokenSlot: 'admin' });
+
 /* ─── Image upload ─── */
 export async function uploadImage(file: File, kind: 'product' | 'color' = 'product'): Promise<string> {
   const path = kind === 'color' ? '/uploads/color-photo' : '/uploads/image';
