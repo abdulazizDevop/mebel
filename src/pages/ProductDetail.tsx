@@ -11,6 +11,7 @@ import { dtoToProduct, getProductBySlug as apiGetProductBySlug } from '../api';
 import type { Product } from '../data/products';
 import { productPath } from '../utils/paths';
 import { SITE_NAME, formatPrice, useDocumentMeta } from '../seo/useDocumentMeta';
+import { SmartImage } from '../components/SmartImage';
 
 export function ProductDetail() {
   // Route: /catalog/:categorySlug/:productSlug — the product is looked up by
@@ -167,16 +168,22 @@ export function ProductDetail() {
             <div className="relative aspect-square max-w-lg mx-auto mb-4 bg-background rounded-[2rem] overflow-visible">
               <div className="w-full h-full rounded-[2rem] overflow-hidden shadow-sm">
                 <AnimatePresence mode="wait">
-                  <motion.img
+                  <motion.div
                     key={`${activeColor}-${activeThumb}`}
-                    src={thumbs[activeThumb]}
-                    alt={product.name}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full"
                     initial={{ opacity: 0, scale: 1.05 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
                     transition={{ duration: 0.3 }}
-                  />
+                  >
+                    <SmartImage
+                      src={thumbs[activeThumb]}
+                      size="md"
+                      loading="eager"
+                      alt={product.name}
+                      className="w-full h-full object-cover"
+                    />
+                  </motion.div>
                 </AnimatePresence>
               </div>
 
@@ -217,7 +224,7 @@ export function ProductDetail() {
                         : "border-transparent opacity-50 hover:opacity-100"
                     )}
                   >
-                    <img src={src} alt="" loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                    <SmartImage src={src} size="sm" alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
                 </div>
@@ -292,8 +299,9 @@ export function ProductDetail() {
         {/* Specs table with thumbnail */}
         <div className="flex gap-5 mb-4">
           <div className="w-20 h-20 rounded-xl overflow-hidden shadow-sm flex-shrink-0 bg-surface">
-            <img
+            <SmartImage
               src={currentImage}
+              size="sm"
               alt={product.name}
               className="w-full h-full object-cover"
             />

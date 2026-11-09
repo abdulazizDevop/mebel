@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     web_shell_url: str = "http://web:80/index.html"
     # Local fallback for dev/tests (a `vite build` output). Empty = ../dist.
     web_shell_path: str = ""
+    # Ping IndexNow (Яндекс/Bing) when products or categories change. Off in
+    # tests; also skipped automatically when public_site_url is not https.
+    indexnow_enabled: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:

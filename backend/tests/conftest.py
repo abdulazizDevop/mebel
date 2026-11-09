@@ -12,6 +12,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TMP / 'test.db'}"
 os.environ["JWT_SECRET"] = "test-secret-not-for-production"
 os.environ["CORS_ORIGINS"] = "http://localhost"
 os.environ["S3_BUCKET"] = ""  # local-disk uploads; never touch real storage from tests
+os.environ["INDEXNOW_ENABLED"] = "0"  # never ping search engines from tests
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

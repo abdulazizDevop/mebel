@@ -9,6 +9,7 @@ from app.database import get_db
 from app.deps import CurrentUser, require_section
 from app.models import Category
 from app.schemas.category import CategoryIn, CategoryOut, CategoryUpdate
+from app.services import indexnow
 from app.services.slug_store import (
     CATEGORY,
     forget_slug,
@@ -67,6 +68,7 @@ def create_category(payload: CategoryIn, db: Annotated[Session, Depends(get_db)]
         db.rollback()
         raise HTTPException(status_code=409, detail="Category with this name already exists")
     db.refresh(cat)
+    indexnow.notify_category(db, cat)
     return cat
 
 
@@ -83,6 +85,7 @@ def update_category(
     cat = db.get(Category, category_id)
     if cat is None:
         raise HTTPException(status_code=404, detail="Category not found")
+    old_path = indexnow.category_path(cat) if cat.slug else None
     if payload.name is not None:
         cat.name = payload.name.strip()
         candidate = unique_category_slug(db, cat.name, exclude_id=cat.id)
@@ -98,6 +101,7 @@ def update_category(
         db.rollback()
         raise HTTPException(status_code=409, detail="Category with this name already exists")
     db.refresh(cat)
+    indexnow.notify_category(db, cat, old_path=old_path if old_path != indexnow.category_path(cat) else None)
     return cat
 
 

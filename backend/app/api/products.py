@@ -10,6 +10,7 @@ from app.database import get_db
 from app.deps import require_section
 from app.models import Category, ColorVariant, Product
 from app.schemas.product import ProductIn, ProductOut, ProductUpdate
+from app.services import indexnow
 from app.services.slug_store import (
     PRODUCT,
     category_segment,
@@ -169,6 +170,7 @@ def create_product(payload: ProductIn, db: Annotated[Session, Depends(get_db)]):
         db.rollback()
         raise HTTPException(status_code=409, detail="SKU already exists")
     db.refresh(product)
+    indexnow.notify_product(db, product, db.get(Category, product.category_id) if product.category_id else None)
     return _to_out(product, db)
 
 
@@ -196,6 +198,9 @@ def update_product(
     data = payload.model_dump(exclude_unset=True)
     variants = data.pop("color_variants", None)
     new_name = data.get("name")
+    old_path = indexnow.product_path(
+        product, db.get(Category, product.category_id) if product.category_id else None
+    ) if product.slug else None
     for k, v in data.items():
         setattr(product, k, v)
     if variants is not None:
@@ -215,6 +220,9 @@ def update_product(
         db.rollback()
         raise HTTPException(status_code=409, detail="SKU already exists")
     db.refresh(product)
+    category = db.get(Category, product.category_id) if product.category_id else None
+    new_path = indexnow.product_path(product, category)
+    indexnow.notify_product(db, product, category, old_path=old_path if old_path != new_path else None)
     return _to_out(product, db)
 
 
@@ -227,6 +235,12 @@ def delete_product(product_id: str, db: Annotated[Session, Depends(get_db)]):
     product = db.get(Product, product_id)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    gone = (
+        indexnow.product_path(product, db.get(Category, product.category_id) if product.category_id else None)
+        if product.slug else None
+    )
     db.delete(product)
     db.commit()
+    if gone:
+        indexnow.submit_paths(db, ["/catalog", gone])  # engines re-fetch → 404 → drop it
     return None

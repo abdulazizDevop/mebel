@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
+import { SmartImage } from '../components/SmartImage';
 import { productWhatsappMessage } from '../utils/whatsapp';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
@@ -220,9 +221,11 @@ export function Home() {
                   background: 'rgb(var(--color-surface))',
                 }}
               >
-                <img
+                <SmartImage
                   src={p.image}
+                  size="md"
                   alt={p.name}
+                  loading={pos === 'center' ? 'eager' : 'lazy'}
                   className="w-full h-full object-cover"
                   style={{
                     filter: s.gray ? 'grayscale(100%)' : 'none',

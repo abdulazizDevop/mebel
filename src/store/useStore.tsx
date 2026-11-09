@@ -28,6 +28,7 @@ import {
   logoutAdmin as apiLogoutAdmin,
   logoutCustomer as apiLogoutCustomer,
   myOrders as apiMyOrders,
+  getOrderChatPublic as apiGetOrderChatPublic,
   placeOrder as apiPlaceOrder,
   productToCreateDto,
   productToUpdateDto,
@@ -465,6 +466,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } else if (tokenStore.get('customer')) {
         const dtos = await apiMyOrders();
         setOrders(dtos.map(dtoToOrder));
+      } else {
+        // Guest: localStorage may still hold orders the admin has since
+        // deleted (or from an old server). Drop the ones the server no
+        // longer knows so the chat never shows a dead «Order not found».
+        const cached = dbGet<Order[]>(DB_KEYS.orders, []).slice(0, 10);
+        if (cached.length === 0) return;
+        const results = await Promise.allSettled(cached.map((o) => apiGetOrderChatPublic(o.id)));
+        const dead = new Set(
+          cached
+            .filter((_, i) => {
+              const r = results[i];
+              return r.status === 'rejected' && r.reason instanceof ApiError && (r.reason.status === 404 || r.reason.status === 403);
+            })
+            .map((o) => o.id),
+        );
+        if (dead.size > 0) {
+          setOrders((prev) => prev.filter((o) => !dead.has(o.id)));
+          setActiveOrderId((cur) => (cur && dead.has(cur) ? null : cur));
+        }
       }
     } catch {
       /* keep whatever we had cached */
@@ -694,6 +714,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         trackEvent({ type: 'chat_open', data: { orderId } });
       }
     } catch (e) {
+      if (e instanceof ApiError && (e.status === 404 || e.status === 403)) {
+        // The order was deleted/closed on the server (or belongs to another
+        // account now). Remove the stale copy instead of showing a raw error.
+        setOrders((prev) => prev.filter((o) => o.id !== orderId));
+        setActiveOrderId((cur) => (cur === orderId ? null : cur));
+        alert('Этот заказ уже закрыт или удалён. Оформите новый заказ или напишите нам в WhatsApp.');
+        return;
+      }
       const msg = e instanceof ApiError ? e.message : 'Network error';
       alert(`Не удалось отправить сообщение: ${msg}`);
     }

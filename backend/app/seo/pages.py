@@ -33,6 +33,22 @@ _env = Environment(
     lstrip_blocks=True,
 )
 
+
+def _thumb(url: str, size: str = "sm") -> str:
+    """`…/products/<uuid>.jpg` → `…/products/<uuid>_sm.webp` for our own
+    storage; other URLs untouched (see services/images.py)."""
+    from app.services.images import is_raster_key, variant_key
+    from app.services.storage import is_own_storage_url
+
+    if not url or not is_own_storage_url(url) or not is_raster_key(url):
+        return url
+    clean = url.split("?")[0]
+    head, _, tail = clean.rpartition("/")
+    return f"{head}/{variant_key(tail, size)}"
+
+
+_env.filters["thumb"] = _thumb
+
 LEGAL_PAGES: dict[str, str] = {
     "requisites": "Реквизиты Rooomebel",
     "privacy": "Политика в отношении обработки персональных данных",

@@ -13,3 +13,4 @@ pywebpush==2.0.3
 boto3==1.40.69
 slowapi==0.1.9
 jinja2==3.1.4
+Pillow==11.0.0

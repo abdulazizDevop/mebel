@@ -17,6 +17,7 @@ import {
 import { CUSTOM_ORDER_LABEL, CUSTOM_ORDER_PATH, CUSTOM_ORDER_SLUG, categoryPath, orderSuccessPath, productPath } from '../utils/paths';
 import { getCategoryBySlug } from '../api';
 import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
+import { SmartImage } from '../components/SmartImage';
 
 // categoryList is now built dynamically inside the component
 
@@ -114,11 +115,10 @@ function TumblerCard({ product, index, onOrder }: { product: Product; index: num
                 background: 'radial-gradient(ellipse at 30% 20%, rgba(255,255,255,0.25) 0%, transparent 60%)',
               }}
             />
-            <img
+            <SmartImage
               src={product.image}
+              size="sm"
               alt={product.name}
-              loading="lazy"
-              decoding="async"
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
             />
           </div>
@@ -447,11 +447,17 @@ export function Catalog() {
         animate={{ opacity: 1, y: 0 }}
         className="relative rounded-[2rem] overflow-hidden mb-10 aspect-[16/10] md:aspect-[16/7]"
       >
-        <img
-          src="https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&q=80&w=1200"
-          alt="интерьер"
-          className="absolute inset-0 w-full h-full object-cover"
-        />
+        {/* Hero backdrop = our own newest product photo (was an Unsplash CDN
+            image: slow/unreliable in RU and 1200 px of foreign bytes). */}
+        {products[0] && (
+          <SmartImage
+            src={products[0].image}
+            size="md"
+            loading="eager"
+            alt="Мебель Rooomebel"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        )}
         <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/30 to-background/70" />
         <div className="relative z-10 flex flex-col items-center justify-center h-full text-center px-6">
           <h2 className="text-5xl md:text-7xl font-bold tracking-tight mb-2">исследуй</h2>
@@ -509,11 +515,10 @@ export function Catalog() {
                 className="flex-shrink-0 w-32 sm:w-44 snap-start group"
               >
                 <div className="aspect-square bg-surface rounded-2xl overflow-hidden shadow-sm mb-3 group-hover:shadow-md transition-shadow">
-                  <img
+                  <SmartImage
                     src={product.image}
+                    size="sm"
                     alt={product.name}
-                    loading="lazy"
-                    decoding="async"
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                 </div>

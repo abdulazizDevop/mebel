@@ -7,6 +7,7 @@ import { cn } from '../utils/cn';
 import { dtoToChatMessage, getOrderChatPublic, socketMessageToDto, tokenStore, uploadAudio, uploadChatImage, useOrderChatSocket } from '../api';
 import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
 import { WhatsAppButton } from '../components/WhatsAppButton';
+import { SmartImage } from '../components/SmartImage';
 
 export function Chat() {
   const { orders, activeOrderId, setActiveOrderId, sendMessage, adminSession, appendChatMessage, whatsappPhone } = useStore();
@@ -240,7 +241,7 @@ export function Chat() {
             )}
             {msg.imageUrl && (
               <a href={msg.imageUrl} target="_blank" rel="noopener noreferrer" className="block mb-1">
-                <img src={msg.imageUrl} alt="Вложение" loading="lazy" className="rounded-xl max-h-56 w-auto object-cover" />
+                <SmartImage src={msg.imageUrl} size="md" alt="Вложение" className="rounded-xl max-h-56 w-auto object-cover" />
               </a>
             )}
             {msg.audioUrl && <AudioMessage src={msg.audioUrl} dark={msg.from === 'client'} />}

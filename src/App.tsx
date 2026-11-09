@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Layout } from './components/Layout';
@@ -9,10 +9,14 @@ import { LegacyProductRedirect } from './pages/LegacyProductRedirect';
 import { Order } from './pages/Order';
 import { OrderSuccess } from './pages/OrderSuccess';
 import { Favorites } from './pages/Favorites';
-import { Profile } from './pages/Profile';
-import { Admin } from './pages/Admin';
-import { Chat } from './pages/Chat';
-import { LegalPage } from './pages/Legal';
+// Customer-facing shop pages above load eagerly; the heavy, rarely-visited
+// screens below are split into their own chunks so a shopper on mobile does
+// not download the 2000-line admin panel, the image cropper or the legal
+// texts just to see the catalog.
+const Profile = lazy(() => import('./pages/Profile').then((m) => ({ default: m.Profile })));
+const Admin = lazy(() => import('./pages/Admin').then((m) => ({ default: m.Admin })));
+const Chat = lazy(() => import('./pages/Chat').then((m) => ({ default: m.Chat })));
+const LegalPage = lazy(() => import('./pages/Legal').then((m) => ({ default: m.LegalPage })));
 import { StoreProvider } from './store/useStore';
 import { ThemeProvider } from './context/ThemeContext';
 import { CartSidebar } from './components/CartSidebar';
@@ -48,6 +52,7 @@ function AnimatedRoutes() {
         exit="exit"
         transition={pageTransition}
       >
+        <Suspense fallback={<div className="min-h-[50vh]" aria-busy="true" />}>
         <Routes location={location}>
           <Route path="/" element={<Home />} />
           {/* Pretty URLs: /catalog, /catalog/<category>, /catalog/<category>/<product> */}
@@ -73,6 +78,7 @@ function AnimatedRoutes() {
           <Route path="/delivery-payment" element={<LegalPage slug="delivery-payment" />} />
           <Route path="/returns" element={<LegalPage slug="returns" />} />
         </Routes>
+        </Suspense>
       </motion.div>
     </AnimatePresence>
   );

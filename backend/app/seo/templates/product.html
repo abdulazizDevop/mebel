@@ -2,11 +2,11 @@
 {% block content %}
 <article class="max-w-lg mx-auto">
   <div class="aspect-square rounded-2xl overflow-hidden mb-4 bg-surface">
-    <img src="{{ product.main_image }}" alt="{{ product.name }} — купить в Дагестане, {{ site_name }}" class="w-full h-full object-cover" />
+    <img src="{{ product.main_image | thumb('md') }}" alt="{{ product.name }} — купить в Дагестане, {{ site_name }}" width="900" height="900" class="w-full h-full object-cover" />
   </div>
   {% if photos|length > 1 %}
   <div class="flex gap-3 overflow-x-auto mb-6">
-    {% for src in photos[1:] %}<img src="{{ src }}" alt="{{ product.name }}, фото {{ loop.index + 1 }}" loading="lazy" decoding="async" class="w-11 h-11 rounded-full object-cover" />{% endfor %}
+    {% for src in photos[1:] %}<img src="{{ src | thumb('sm') }}" alt="{{ product.name }}, фото {{ loop.index + 1 }}" loading="lazy" decoding="async" width="44" height="44" class="w-11 h-11 rounded-full object-cover" />{% endfor %}
   </div>
   {% endif %}
   <h1 class="text-2xl md:text-3xl font-bold tracking-tight leading-tight mb-2">{{ product.name }}</h1>

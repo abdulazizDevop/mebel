@@ -20,6 +20,8 @@ from app.database import get_db
 from app.seo import site
 from app.seo.pages import Page, all_sitemap_entries, build_page
 from app.seo.shell import get_shell
+from app.services.indexnow import KEY_SETTING as INDEXNOW_KEY_SETTING
+from app.services.settings_store import get_setting
 
 router = APIRouter(tags=["seo"])
 
@@ -72,6 +74,11 @@ def inject(shell: str, page: Page, seo: dict[str, str]) -> str:
 
 @router.api_route("/_render/{path:path}", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
 def render_page(path: str, request: Request, db: Annotated[Session, Depends(get_db)]) -> Response:
+    # IndexNow ownership proof: https://<host>/<key>.txt must echo the key.
+    if path.endswith(".txt") and "/" not in path:
+        key = get_setting(db, INDEXNOW_KEY_SETTING, "")
+        if key and path[:-4] == key:
+            return PlainTextResponse(key, headers={"Cache-Control": "public, max-age=86400"})
     # One URL per page: `/catalog/` → `/catalog` (keeps duplicates out of the index).
     if path.endswith("/") and path.strip("/"):
         query = f"?{request.url.query}" if request.url.query else ""

@@ -3,6 +3,7 @@ import { Heart, Trash2, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { productPath } from '../utils/paths';
+import { SmartImage } from '../components/SmartImage';
 
 export function Favorites() {
   const navigate = useNavigate();
@@ -61,7 +62,7 @@ export function Favorites() {
                 onClick={() => navigate(productPath(product))}
                 className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0"
               >
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover hover:scale-110 transition-transform" />
+                <SmartImage src={product.image} size="sm" alt={product.name} className="w-full h-full object-cover hover:scale-110 transition-transform" />
               </button>
               <div className="flex-1 min-w-0">
                 <button onClick={() => navigate(productPath(product))} className="text-left">

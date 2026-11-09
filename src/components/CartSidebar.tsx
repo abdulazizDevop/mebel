@@ -3,6 +3,7 @@ import { X, Minus, Plus, ShoppingBag } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { WhatsAppButton } from './WhatsAppButton';
+import { SmartImage } from './SmartImage';
 import { cartWhatsappMessage } from '../utils/whatsapp';
 import { ORDER_PATH } from '../utils/paths';
 
@@ -70,8 +71,9 @@ export function CartSidebar() {
                       className="flex gap-4 bg-surface rounded-2xl p-3 shadow-sm"
                     >
                       <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                        <img
+                        <SmartImage
                           src={item.product.colorVariants[item.colorIndex]?.image || item.product.image}
+                          size="sm"
                           alt={item.product.name}
                           className="w-full h-full object-cover"
                         />

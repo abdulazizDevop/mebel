@@ -6,6 +6,7 @@ import { useStore } from '../store/useStore';
 import { cn } from '../utils/cn';
 import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
 import { CONSENT_ERRORS, ConsentCheckbox, MarketingConsentText, TermsConsentText } from '../components/ConsentCheckbox';
+import { SmartImage } from '../components/SmartImage';
 import { orderSuccessPath, productPath } from '../utils/paths';
 import { SITE_NAME, useDocumentMeta } from '../seo/useDocumentMeta';
 
@@ -128,8 +129,9 @@ export function Order() {
           <p className="text-xs opacity-40 mb-2">Ваш заказ</p>
           {cart.map((item) => (
             <div key={item.product.id} className="flex items-center gap-3 py-1.5 text-sm">
-              <img
+              <SmartImage
                 src={item.product.colorVariants[item.colorIndex]?.image || item.product.image}
+                size="sm"
                 alt=""
                 className="w-10 h-10 rounded-lg object-cover flex-shrink-0"
               />

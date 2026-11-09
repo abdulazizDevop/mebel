@@ -245,9 +245,35 @@ def _put_local(stream: BinaryIO, key: str) -> str:
     return f"/static/uploads/{key}"
 
 
+def put_object(body: bytes, key: str, content_type: str) -> str:
+    """Store bytes under `key` on the active backend (S3 or local disk) and
+    return the public URL. Sync — call from a thread in async code."""
+    import io
+
+    if get_settings().s3_enabled:
+        _put_s3(io.BytesIO(body), key, content_type)
+        return _public_url(key)
+    return _put_local(io.BytesIO(body), key)
+
+
+def store_image_with_variants(body: bytes, key: str, content_type: str) -> str:
+    """Original + `_sm.webp` / `_md.webp` renditions (see services/images.py).
+    A rendition failure never fails the upload — the storefront falls back to
+    the original — but it is logged so the backfill tool can pick it up."""
+    from app.services import images
+
+    url = put_object(body, key, content_type)
+    if images.is_raster_key(key):
+        try:
+            for size, data in images.derive_variants(body).items():
+                put_object(data, images.variant_key(key, size), "image/webp")
+        except Exception:  # noqa: BLE001
+            log.exception("Could not derive renditions for %s", key)
+    return url
+
+
 async def upload_image(file: UploadFile, *, prefix: str = "products") -> str:
     """Returns a public URL pointing at the saved image."""
-    settings = get_settings()
     # Read once into memory so we can both validate the size and rewind for
     # the upload backend. 10 MB cap means this is OK; for larger files we'd
     # stream directly.
@@ -257,15 +283,10 @@ async def upload_image(file: UploadFile, *, prefix: str = "products") -> str:
     ext = _ext_for(file.content_type, file.filename)
     key = _key(prefix, ext)
 
-    if settings.s3_enabled:
-        # boto3 is sync — push to a thread to keep the event loop responsive.
-        import io
-        await asyncio.to_thread(_put_s3, io.BytesIO(body), key, file.content_type or "application/octet-stream")
-        return _public_url(key)
-
-    # Local fallback — good enough for dev, never use in prod.
-    import io
-    return _put_local(io.BytesIO(body), key)
+    # boto3 + Pillow are sync/CPU-bound — off the event loop.
+    return await asyncio.to_thread(
+        store_image_with_variants, body, key, file.content_type or "application/octet-stream"
+    )
 
 
 async def upload_audio(file: UploadFile, *, prefix: str = "voice") -> str:
