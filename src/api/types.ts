@@ -70,6 +70,8 @@ export interface TokenResponse {
 export interface CategoryDTO {
   id: number;
   name: string;
+  /** URL segment: /catalog/{slug} */
+  slug: string;
   sort_order: number;
   created_at: string;
 }
@@ -87,6 +89,9 @@ export interface ProductDTO {
   id: string;
   name: string;
   sku: string;
+  /** URL pieces: /catalog/{category_slug}/{slug} (`tovary` when uncategorised). */
+  slug: string;
+  category_slug: string;
   price: number;
   purchase_price: number | null;
   main_image: string;
@@ -105,7 +110,7 @@ export interface ProductDTO {
 
 export type ProductCreateDTO = Omit<
   ProductDTO,
-  'id' | 'created_at' | 'updated_at' | 'category_name' | 'color_variants' | 'sku'
+  'id' | 'created_at' | 'updated_at' | 'category_name' | 'color_variants' | 'sku' | 'slug' | 'category_slug'
 > & {
   sku?: string;
   color_variants: Omit<ColorVariantDTO, 'id'>[];
@@ -167,6 +172,20 @@ export interface OrderCreateDTO {
   marketing_consent?: boolean;
   /** Anonymous visitor id so guest consents correlate with the cookie decision. */
   request_id?: string;
+  /** Ad marks of the visit that led here (see analytics/attribution.ts). */
+  attribution?: AttributionDTO;
+}
+
+/** UTM / click-id marks captured on landing; stored on the order. */
+export interface AttributionDTO {
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  yclid?: string;
+  gclid?: string;
+  landing_page?: string;
 }
 
 /* ─── Analytics ─── */
@@ -196,6 +215,31 @@ export interface TopProductDTO {
 }
 
 export type StatsPeriod = 'today' | 'week' | 'month' | 'custom';
+
+/** One advertising source in the per-campaign report (GET /stats/campaigns). */
+export interface CampaignRowDTO {
+  key: string;
+  label: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  visitors: number;
+  orders: number;
+  custom_orders: number;
+  revenue: number;
+  conversion_pct: number;
+}
+
+export interface CampaignsDTO {
+  rows: CampaignRowDTO[];
+  best_key: string | null;
+  total_visitors: number;
+  total_orders: number;
+  total_revenue: number;
+  period: StatsPeriod;
+  range_from: string;
+  range_to: string;
+}
 
 export interface StatsDTO {
   visits: number;

@@ -5,6 +5,7 @@ import type {
   AdminUserCreateDTO,
   AdminUserUpdateDTO,
   AnalyticsEventInDTO,
+  CampaignsDTO,
   CategoryDTO,
   ChatMessageDTO,
   ConsentInDTO,
@@ -111,6 +112,12 @@ export const listProducts = (params?: {
   return api.get<ProductDTO[]>(`/products${q ? `?${q}` : ''}`);
 };
 export const getProduct = (id: string) => api.get<ProductDTO>(`/products/${id}`);
+/** `/catalog/<category>/<slug>` lookup. Old slugs still resolve: compare the
+ *  returned `slug`/`category_slug` with the URL and replace it when they differ. */
+export const getProductBySlug = (slug: string) =>
+  api.get<ProductDTO>(`/products/by-slug/${encodeURIComponent(slug)}`);
+export const getCategoryBySlug = (slug: string) =>
+  api.get<CategoryDTO>(`/categories/by-slug/${encodeURIComponent(slug)}`);
 export const createProduct = (input: ProductCreateDTO) =>
   api.post<ProductDTO>('/products', input, { tokenSlot: 'admin' });
 export const updateProduct = (id: string, patch: Partial<ProductCreateDTO>) =>
@@ -245,4 +252,13 @@ export const fetchStats = (params: {
   if (params.from) qs.set('from', params.from);
   if (params.to) qs.set('to', params.to);
   return api.get<StatsDTO>(`/stats?${qs.toString()}`, { tokenSlot: 'admin' });
+};
+
+/** Admin-only per-campaign ad report: visitors vs REAL orders by UTM / click id. */
+export const fetchCampaignStats = (params: { period: StatsPeriod; from?: string; to?: string }) => {
+  const qs = new URLSearchParams();
+  qs.set('period', params.period);
+  if (params.from) qs.set('from', params.from);
+  if (params.to) qs.set('to', params.to);
+  return api.get<CampaignsDTO>(`/stats/campaigns?${qs.toString()}`, { tokenSlot: 'admin' });
 };

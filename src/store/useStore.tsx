@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { Product, products as defaultProducts } from '../data/products';
 import { getVisitorId, hasAnalyticsConsent } from '../consent/cookieConsent';
+import { ATTRIBUTION_KEY, captureAttribution, getAttribution } from '../analytics/attribution';
+import { metrikaGoal, metrikaPurchase } from '../analytics/metrika';
 import {
   ApiError,
   CategoryDTO,
@@ -249,6 +251,8 @@ interface StoreContextType {
   addCategory: (name: string) => void;
   removeCategory: (name: string) => void;
   allCategories: string[];
+  /** Server categories with slugs — for /catalog/{slug} routing. */
+  categories: CategoryDTO[];
 
   /** WhatsApp number (digits only) for the "order via WhatsApp" button. Empty = hidden. */
   whatsappPhone: string;
@@ -340,9 +344,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       }
       try {
         const theme = localStorage.getItem('rooomebel_theme');
+        // Ad marks are per browser, not per account — keep them so an order
+        // placed after re-login still credits the campaign that brought it.
+        const attribution = localStorage.getItem(ATTRIBUTION_KEY);
         localStorage.clear();
         sessionStorage.clear();
         if (theme) localStorage.setItem('rooomebel_theme', theme);
+        if (attribution) localStorage.setItem(ATTRIBUTION_KEY, attribution);
       } catch {
         /* ignore — private mode etc. */
       }
@@ -416,7 +424,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Track initial visit — fire a single `visit` event to the backend per
   // page-mount. Anonymous (no customer JWT) hits land with just session_id.
   useEffect(() => {
-    apiIngestAnalyticsEvent({ type: 'visit', session_id: getOrCreateSessionId() }).catch(() => {});
+    // Remember which ad (utm / yclid / gclid) brought this visit, then count
+    // the visit under that source so the admin campaign report can compare
+    // visitors with the real orders placed later.
+    captureAttribution();
+    const attribution = getAttribution();
+    apiIngestAnalyticsEvent({
+      type: 'visit',
+      session_id: getOrCreateSessionId(),
+      data: attribution ? { ...attribution } : undefined,
+    }).catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -550,10 +567,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         terms_accepted: true, // the form refuses to submit until the box is ticked
         marketing_consent: consents.marketing,
         request_id: getVisitorId(),
+        attribution: getAttribution(),
       });
       const order = dtoToOrder(dto);
       setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
       setActiveOrderId(order.id);
+      // Conversion fires here and only here: the server has accepted the order.
+      metrikaGoal('order', { order_id: order.id, order_price: order.total, currency: 'RUB' });
+      metrikaPurchase(
+        order.id,
+        order.total,
+        cart.map((c) => ({
+          id: c.product.id,
+          name: c.product.name,
+          price: c.product.price,
+          quantity: c.qty,
+          category: c.product.category || undefined,
+        })),
+      );
       clearCart();
       setCartOpen(false);
       trackEvent({ type: 'cart_checkout', data: { total: order.total, itemCount: order.items.length } });
@@ -588,10 +619,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         personal_data_consent: true,
         marketing_consent: consents.marketing,
         request_id: getVisitorId(),
+        attribution: getAttribution(),
       });
       const order = dtoToOrder(dto);
       setOrders((prev) => [order, ...prev.filter((o) => o.id !== order.id)]);
       setActiveOrderId(order.id);
+      metrikaGoal('custom_order', { order_id: order.id });
       addNotification(`Индивидуальный заказ от ${name}`, order.id);
       maybeSubscribeGuest(order.id);
       return order.id;
@@ -939,6 +972,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       notifications, addNotification, markNotificationRead, unreadCount,
       recommendations, addRecommendation, updateRecommendation, removeRecommendation,
       customCategories: apiCategoryNames, addCategory, removeCategory, allCategories: allCategoriesList,
+      categories: categoriesData,
       whatsappPhone, callPhone, refreshConfig,
       adminSession, setAdminSession, logoutAdmin,
       userSession, setUserSession, logoutUser, registeredUsers, registerUser, loginUser,

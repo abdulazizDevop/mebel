@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Star, ShoppingBag, ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { cn } from '../utils/cn';
@@ -7,12 +7,16 @@ import { useStore } from '../store/useStore';
 import { LiquidButton } from '../components/LiquidButton';
 import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
 import { productWhatsappMessage } from '../utils/whatsapp';
-import { dtoToProduct, getProduct as apiGetProduct } from '../api';
+import { dtoToProduct, getProductBySlug as apiGetProductBySlug } from '../api';
 import type { Product } from '../data/products';
+import { productPath } from '../utils/paths';
 
 export function ProductDetail() {
-  const { id } = useParams<{ id: string }>();
+  // Route: /catalog/:categorySlug/:productSlug — the product is looked up by
+  // its own slug; the category segment is cosmetic and corrected below.
+  const { productSlug = '' } = useParams<{ categorySlug: string; productSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { allProducts: products, addToCart, toggleFavorite, isFavorite: isFav, trackEvent, whatsappPhone, callPhone } = useStore();
   const [showOrderToast, setShowOrderToast] = useState(false);
   const [activeColor, setActiveColor] = useState(0);
@@ -28,20 +32,44 @@ export function ProductDetail() {
   // photos[]) to keep payloads tiny. On the detail page we need the full
   // gallery, so fetch it once and prefer it over the cached slim copy.
   const [fullProduct, setFullProduct] = useState<Product | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
-    apiGetProduct(id)
-      .then((dto) => setFullProduct(dtoToProduct(dto)))
-      .catch(() => {/* leave fullProduct null; we'll fall back to the slim cached version */});
-  }, [id]);
+    if (!productSlug) return;
+    let cancelled = false;
+    setFullProduct(null);
+    setNotFound(false);
+    apiGetProductBySlug(productSlug)
+      .then((dto) => {
+        if (cancelled) return;
+        const full = dtoToProduct(dto);
+        setFullProduct(full);
+        // Old slug (renamed product) or stale category segment → replace the
+        // URL with the canonical one, like a 301.
+        const canonical = productPath(full);
+        if (location.pathname !== canonical) navigate(canonical + location.search, { replace: true });
+      })
+      .catch(() => {
+        // Slim cached copy may still render; otherwise show «не найден».
+        if (!cancelled) setNotFound(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productSlug]);
 
-  const product = fullProduct || products.find((p) => p.id === id);
+  const product = fullProduct || products.find((p) => p.slug === productSlug);
   const isFavorite = product ? isFav(product.id) : false;
 
   useEffect(() => {
     if (product) trackEvent({ type: 'product_view', productId: product.id });
   }, [product?.id, trackEvent]);
+
+  if (!product && !notFound) {
+    // Fetch in flight on a cold load — keep the layout steady, no flash of «не найден».
+    return <div className="min-h-[50vh]" aria-busy="true" />;
+  }
 
   if (!product) {
     return (

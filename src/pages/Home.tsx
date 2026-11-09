@@ -6,6 +6,7 @@ import { WhatsAppButton, CallLink } from '../components/WhatsAppButton';
 import { productWhatsappMessage } from '../utils/whatsapp';
 import { useStore } from '../store/useStore';
 import { useTheme } from '../context/ThemeContext';
+import { productPath } from '../utils/paths';
 
 function getPositionClass(offset: number, total: number): string {
   if (offset === 0) return 'center';
@@ -306,7 +307,7 @@ export function Home() {
           />
         )}
         {callPhone && <CallLink phone={callPhone} />}
-        <Link to={`/product/${active.id}`} className="text-sm font-bold opacity-50 hover:opacity-100 transition-opacity mt-1">
+        <Link to={productPath(active)} className="text-sm font-bold opacity-50 hover:opacity-100 transition-opacity mt-1">
           Подробнее →
         </Link>
       </motion.div>

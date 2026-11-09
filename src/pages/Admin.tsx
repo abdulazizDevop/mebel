@@ -6,7 +6,7 @@ import {
   Edit3, X, Save, Check, Settings, Upload, Camera,
   Pipette, BarChart3, Users, ShoppingCart, Heart, Eye, Calendar,
   Shield, TrendingUp, Star, AlertCircle, LogOut, Wallet, UserPlus, KeyRound,
-  Crown, Phone, ImagePlus, Archive, ArchiveRestore
+  Crown, Phone, ImagePlus, Archive, ArchiveRestore, Megaphone
 } from 'lucide-react';
 import { useStore, Order, RecommendationCategory, ALL_SECTIONS } from '../store/useStore';
 import { Product } from '../data/products';
@@ -19,6 +19,7 @@ import {
   updateContactSettings,
   dtoToChatMessage,
   dtoToProduct,
+  fetchCampaignStats,
   fetchStats,
   getProduct as apiGetProduct,
   listAdminUsers as apiListAdminUsers,
@@ -29,7 +30,7 @@ import {
   uploadImage,
   useOrderChatSocket,
 } from '../api';
-import type { AdminUser, StatsDTO } from '../api';
+import type { AdminUser, CampaignsDTO, StatsDTO } from '../api';
 import { AudioMessage, VoiceRecorder } from '../components/VoiceRecorder';
 
 /* ═══════════════════════════════════════════════════
@@ -793,6 +794,109 @@ function ProductForm({
 }
 
 /* ═══════════════════════════════════════════════════
+   CampaignsReport — which ad brought the visitors and the REAL orders
+   (server-aggregated via /stats/campaigns; independent of Метрика)
+   ═══════════════════════════════════════════════════ */
+type DashboardPeriod = 'today' | 'week' | 'month' | 'custom';
+
+function CampaignsReport({ period, customFrom, customTo }: { period: DashboardPeriod; customFrom: string; customTo: string }) {
+  const [data, setData] = useState<CampaignsDTO | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const params: { period: DashboardPeriod; from?: string; to?: string } = { period };
+    if (period === 'custom') {
+      if (!customFrom || !customTo) return;
+      params.from = new Date(customFrom).toISOString();
+      params.to = new Date(customTo + 'T23:59:59').toISOString();
+    }
+    setFailed(false);
+    fetchCampaignStats(params)
+      .then((d) => { if (!cancelled) setData(d); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [period, customFrom, customTo]);
+
+  const rows = data?.rows ?? [];
+  const money = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-surface rounded-3xl p-5 sm:p-6 shadow-sm">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 className="text-base font-bold flex items-center gap-2">
+            <Megaphone size={18} className="opacity-60" /> Реклама: откуда пришли заказы
+          </h3>
+          <p className="text-[11px] opacity-50 mt-1">
+            Посетители — по рекламным меткам первого захода (UTM / yclid). Заказы — только реально оформленные, из базы заказов.
+          </p>
+        </div>
+        {data && (
+          <div className="text-right whitespace-nowrap">
+            <p className="text-lg font-bold leading-tight">{money(data.total_revenue)}</p>
+            <p className="text-[10px] opacity-40">{data.total_orders} заказ(ов) · {data.total_visitors} посет.</p>
+          </div>
+        )}
+      </div>
+
+      {failed && <p className="text-xs text-red-500">Не удалось загрузить отчёт по кампаниям.</p>}
+
+      {!failed && data && rows.length === 0 && (
+        <p className="text-xs opacity-50">
+          За период нет ни визитов, ни заказов. Как только объявления Директа начнут приводить людей по ссылкам с UTM-метками, здесь появится разбивка по кампаниям.
+        </p>
+      )}
+
+      {rows.length > 0 && (
+        <div className="overflow-x-auto -mx-2">
+          <table className="w-full text-xs min-w-[560px]">
+            <thead>
+              <tr className="text-[10px] uppercase tracking-wider opacity-40">
+                <th className="text-left font-bold px-2 py-2">Источник / кампания</th>
+                <th className="text-right font-bold px-2 py-2">Посетители</th>
+                <th className="text-right font-bold px-2 py-2">Заказы</th>
+                <th className="text-right font-bold px-2 py-2">Сумма</th>
+                <th className="text-right font-bold px-2 py-2">Конверсия</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => {
+                const best = r.key === data?.best_key;
+                return (
+                  <tr key={r.key} className={cn('border-t border-primary/5', best && 'bg-green-500/5')}>
+                    <td className="px-2 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={cn('font-bold truncate', r.key === '__direct__' && 'opacity-60 font-medium')}>{r.label}</span>
+                        {best && (
+                          <span className="text-[9px] font-bold uppercase tracking-wider bg-green-500/15 text-green-700 px-2 py-0.5 rounded-full whitespace-nowrap">
+                            лучшая
+                          </span>
+                        )}
+                      </div>
+                      {r.utm_medium && r.key !== '__direct__' && (
+                        <p className="text-[10px] opacity-40 truncate">{r.utm_medium}</p>
+                      )}
+                    </td>
+                    <td className="text-right px-2 py-2.5 tabular-nums">{r.visitors}</td>
+                    <td className="text-right px-2 py-2.5 tabular-nums font-bold">
+                      {r.orders}
+                      {r.custom_orders > 0 && <span className="opacity-40 font-normal"> (инд. {r.custom_orders})</span>}
+                    </td>
+                    <td className="text-right px-2 py-2.5 tabular-nums">{money(r.revenue)}</td>
+                    <td className="text-right px-2 py-2.5 tabular-nums">{r.visitors > 0 ? `${r.conversion_pct.toFixed(1)} %` : '—'}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </motion.div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    Dashboard — Analytics view (server-aggregated via /stats)
    ═══════════════════════════════════════════════════ */
 function Dashboard() {
@@ -1047,6 +1151,9 @@ function Dashboard() {
           </div>
         </div>
       )}
+
+      {/* Ad campaigns → visitors vs real orders (same period selector) */}
+      <CampaignsReport period={period} customFrom={customFrom} customTo={customTo} />
 
       {/* Summary row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">

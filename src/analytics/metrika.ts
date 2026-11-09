@@ -61,8 +61,47 @@ export function metrikaHit(url: string): void {
   window.ym(COUNTER_ID, 'hit', url);
 }
 
-/** Conversion goal (e.g. `zakaz`). No-op without consent. */
-export function metrikaGoal(name: string, params?: Record<string, unknown>): void {
+/** Conversion goal. No-op without consent. The two goals the owner creates in
+ *  Метрика as «JavaScript-событие» are `order` (catalogue order) and
+ *  `custom_order` (individual order); both fire ONLY after POST /orders
+ *  returned 201 — never on cart or page view. */
+export function metrikaGoal(name: 'order' | 'custom_order', params?: Record<string, unknown>): void {
   if (!loaded || !window.ym) return;
   window.ym(COUNTER_ID, 'reachGoal', name, params);
+}
+
+export interface PurchaseLine {
+  id: string;
+  name: string;
+  price: number;
+  quantity: number;
+  category?: string;
+}
+
+declare global {
+  interface Window {
+    dataLayer?: unknown[];
+  }
+}
+
+/** Метрика e-commerce `purchase` (counter inited with `ecommerce: 'dataLayer'`),
+ *  so Директ reports revenue per campaign. Same consent gate as the goals. */
+export function metrikaPurchase(orderId: string, revenue: number, lines: PurchaseLine[]): void {
+  if (!loaded || !window.ym) return;
+  window.dataLayer = window.dataLayer || [];
+  window.dataLayer.push({
+    ecommerce: {
+      currencyCode: 'RUB',
+      purchase: {
+        actionField: { id: orderId, revenue },
+        products: lines.map((l) => ({
+          id: l.id,
+          name: l.name,
+          price: l.price,
+          quantity: l.quantity,
+          ...(l.category ? { category: l.category } : {}),
+        })),
+      },
+    },
+  });
 }

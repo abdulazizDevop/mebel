@@ -19,6 +19,8 @@ export function dtoToProduct(d: ProductDTO): Product {
     id: d.id,
     name: d.name,
     sku: d.sku,
+    slug: d.slug,
+    categorySlug: d.category_slug,
     price: Number(d.price),
     purchasePrice: d.purchase_price === null ? undefined : Number(d.purchase_price),
     image: d.main_image,

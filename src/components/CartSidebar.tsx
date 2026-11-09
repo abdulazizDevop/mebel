@@ -1,87 +1,22 @@
-import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Minus, Plus, ShoppingBag } from 'lucide-react';
-import { useStore } from '../store/useStore';
-import { cn } from '../utils/cn';
-import { formatPhoneInput, isValidName, isValidPhone, sanitizeNameInput } from '../utils/format';
 import { useNavigate } from 'react-router-dom';
+import { useStore } from '../store/useStore';
 import { WhatsAppButton } from './WhatsAppButton';
 import { cartWhatsappMessage } from '../utils/whatsapp';
-import { CONSENT_ERRORS, ConsentCheckbox, MarketingConsentText, TermsConsentText } from './ConsentCheckbox';
-import { OrderAccepted, type OrderAcceptedLine } from './OrderAccepted';
+import { ORDER_PATH } from '../utils/paths';
 
+/* Cart drawer. Checkout itself lives on /order (its own page, see
+ * pages/Order.tsx) — the drawer only lists items and hands off. */
 export function CartSidebar() {
-  const { cart, cartOpen, setCartOpen, removeFromCart, addToCart, placeOrder, setActiveOrderId, userSession, whatsappPhone } = useStore();
+  const { cart, cartOpen, setCartOpen, removeFromCart, addToCart, whatsappPhone } = useStore();
   const navigate = useNavigate();
-  const [step, setStep] = useState<'cart' | 'form' | 'done'>('cart');
-  const [name, setName] = useState(userSession?.name || '');
-  const [phone, setPhone] = useState('');
-  const [orderId, setOrderId] = useState('');
-  // Snapshot of what was ordered — the cart is cleared once the order is placed.
-  const [acceptedLines, setAcceptedLines] = useState<OrderAcceptedLine[]>([]);
-  const [acceptedTotal, setAcceptedTotal] = useState(0);
-
-  // Legal checkboxes — always start unchecked (ТЗ §13/§14).
-  const [termsAccepted, setTermsAccepted] = useState(false);
-  const [marketingConsent, setMarketingConsent] = useState(false);
-  const [termsTouched, setTermsTouched] = useState(false);
-
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [nameTouched, setNameTouched] = useState(false);
-  const [phoneTouched, setPhoneTouched] = useState(false);
-
-  const nameValid = isValidName(name);
-  const phoneValid = isValidPhone(phone);
-  const formValid = nameValid && phoneValid;
 
   const total = cart.reduce((s, i) => s + i.product.price * i.qty, 0);
-
-  const resetForm = () => {
-    setStep('cart');
-    setName('');
-    setPhone('');
-    setTermsAccepted(false);
-    setMarketingConsent(false);
-    setTermsTouched(false);
-    setSubmitError('');
-  };
-
-  const handlePlaceOrder = async () => {
-    setNameTouched(true);
-    setPhoneTouched(true);
-    setTermsTouched(true);
-    if (!formValid) return;
-    if (!termsAccepted) {
-      setSubmitError(CONSENT_ERRORS.terms);
-      return;
-    }
-    setSubmitting(true);
-    setSubmitError('');
-    const lines = cart.map((i) => ({ name: i.product.name, qty: i.qty, price: i.product.price }));
-    const snapshotTotal = total;
-    const id = await placeOrder(name.trim(), phone.trim(), { marketing: marketingConsent });
-    setSubmitting(false);
-    if (!id) {
-      setSubmitError('Не удалось оформить заказ. Попробуйте ещё раз.');
-      return;
-    }
-    setOrderId(id);
-    setAcceptedLines(lines);
-    setAcceptedTotal(snapshotTotal);
-    setStep('done');
-  };
-
-  const handleClose = () => {
+  const close = () => setCartOpen(false);
+  const goToCheckout = () => {
     setCartOpen(false);
-    setTimeout(resetForm, 300);
-  };
-
-  const handleGoToChat = () => {
-    setCartOpen(false);
-    setActiveOrderId(orderId);
-    navigate('/chat');
-    setTimeout(resetForm, 300);
+    navigate(ORDER_PATH);
   };
 
   return (
@@ -93,229 +28,100 @@ export function CartSidebar() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={handleClose}
+            onClick={close}
             className="fixed inset-0 bg-black/20 backdrop-blur-sm z-[60]"
           />
 
-          {/* Sidebar */}
+          {/* Drawer — bg-background (opaque, theme-aware); sits above the z-50 navbar. */}
           <motion.div
             initial={{ x: '100%', opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            /* bg-background, not `var(--color-bg)`: that variable holds an RGB
-               triple, so the old inline style was invalid and the panel rendered
-               see-through over the blurred page. */
             className="fixed top-0 right-0 h-[100dvh] w-full max-w-sm z-[70] shadow-2xl flex flex-col bg-background"
           >
             {/* Header */}
             <div className="flex items-center justify-between p-6 border-b border-primary/5">
               <div className="flex items-center gap-2">
                 <ShoppingBag size={20} />
-                <h3 className="text-lg font-bold">
-                  {step === 'cart' && 'Корзина'}
-                  {step === 'form' && 'Оформление'}
-                  {step === 'done' && 'Заказ принят'}
-                </h3>
+                <h3 className="text-lg font-bold">Корзина</h3>
               </div>
-              <button onClick={handleClose} className="p-2 hover:bg-primary/5 rounded-full transition-colors" aria-label="Закрыть">
+              <button onClick={close} className="p-2 hover:bg-primary/5 rounded-full transition-colors" aria-label="Закрыть">
                 <X size={20} />
               </button>
             </div>
 
-            {/* Content — min-h-0 lets this flex child actually shrink and
-                scroll; without it a long checkout form pushed the footer with
-                «Отправить заказ» below the phone's viewport. */}
+            {/* Items — min-h-0 lets this flex child shrink and scroll */}
             <div className="flex-1 min-h-0 overflow-y-auto p-6">
-              <AnimatePresence mode="wait">
-                {step === 'cart' && (
-                  <motion.div
-                    key="cart"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                  >
-                    {cart.length === 0 ? (
-                      <div className="flex flex-col items-center justify-center py-16 text-center">
-                        <ShoppingBag size={40} className="opacity-15 mb-4" />
-                        <p className="opacity-40 text-sm">Корзина пуста</p>
+              {cart.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <ShoppingBag size={40} className="opacity-15 mb-4" />
+                  <p className="opacity-40 text-sm">Корзина пуста</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {cart.map((item) => (
+                    <motion.div
+                      key={item.product.id}
+                      layout
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, x: 50 }}
+                      className="flex gap-4 bg-surface rounded-2xl p-3 shadow-sm"
+                    >
+                      <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
+                        <img
+                          src={item.product.colorVariants[item.colorIndex]?.image || item.product.image}
+                          alt={item.product.name}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {cart.map((item) => (
-                          <motion.div
-                            key={item.product.id}
-                            layout
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, x: 50 }}
-                            className="flex gap-4 bg-surface rounded-2xl p-3 shadow-sm"
-                          >
-                            <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0">
-                              <img
-                                src={item.product.colorVariants[item.colorIndex]?.image || item.product.image}
-                                alt={item.product.name}
-                                className="w-full h-full object-cover"
-                              />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="text-sm font-bold truncate">{item.product.name}</h4>
-                              <p className="text-xs opacity-40">{item.product.sku}</p>
-                              <div className="flex items-center justify-between mt-2">
-                                <span className="text-sm font-bold">{item.product.price * item.qty} ₽</span>
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => {
-                                      if (item.qty <= 1) removeFromCart(item.product.id);
-                                      else {
-                                        // Decrease qty by removing and re-adding with qty-1
-                                        removeFromCart(item.product.id);
-                                        for (let n = 0; n < item.qty - 1; n++) {
-                                          addToCart(item.product, item.colorIndex);
-                                        }
-                                      }
-                                    }}
-                                    className="w-7 h-7 rounded-full border border-primary/10 flex items-center justify-center hover:bg-primary/5 transition-colors"
-                                  >
-                                    <Minus size={12} />
-                                  </button>
-                                  <span className="text-sm font-bold w-5 text-center">{item.qty}</span>
-                                  <button
-                                    onClick={() => addToCart(item.product, item.colorIndex)}
-                                    className="w-7 h-7 rounded-full border border-primary/10 flex items-center justify-center hover:bg-primary/5 transition-colors"
-                                  >
-                                    <Plus size={12} />
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    )}
-                  </motion.div>
-                )}
-
-                {step === 'form' && (
-                  <motion.div
-                    key="form"
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="space-y-5"
-                  >
-                    <p className="text-sm opacity-50">
-                      Оставьте ваши данные и мы свяжемся с вами
-                    </p>
-                    <div className="space-y-1">
-                      <label className="text-sm font-bold px-1">Имя</label>
-                      <input
-                        value={name}
-                        // Strip digits/symbols on the way in so the user can't
-                        // accidentally save "test123" as their name.
-                        onChange={(e) => setName(sanitizeNameInput(e.target.value))}
-                        onBlur={() => setNameTouched(true)}
-                        placeholder="Ваше имя"
-                        className={cn(
-                          'w-full bg-surface rounded-full px-5 py-3 border-2 shadow-sm outline-none text-sm transition-colors',
-                          nameTouched && !nameValid
-                            ? 'border-red-400 focus:border-red-500'
-                            : 'border-transparent focus:border-primary',
-                        )}
-                      />
-                      {nameTouched && !nameValid && (
-                        <p className="text-[11px] text-red-500 px-2">Введите имя (минимум 2 буквы, без цифр)</p>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-sm font-bold px-1">Телефон</label>
-                      <input
-                        value={phone}
-                        // Auto-formats to +998 (XX) XXX-XX-XX (or +7 …) as the
-                        // user types and silently drops anything non-digit.
-                        onChange={(e) => setPhone(formatPhoneInput(e.target.value))}
-                        onBlur={() => setPhoneTouched(true)}
-                        placeholder="+7 (999) 123-45-67"
-                        type="tel"
-                        inputMode="tel"
-                        autoComplete="tel"
-                        className={cn(
-                          'w-full bg-surface rounded-full px-5 py-3 border-2 shadow-sm outline-none text-sm transition-colors',
-                          phoneTouched && !phoneValid
-                            ? 'border-red-400 focus:border-red-500'
-                            : 'border-transparent focus:border-primary',
-                        )}
-                      />
-                      {phoneTouched && !phoneValid && (
-                        <p className="text-[11px] text-red-500 px-2">Введите номер целиком (минимум 9 цифр)</p>
-                      )}
-                    </div>
-
-                    {/* Order summary */}
-                    <div className="bg-surface rounded-2xl p-4 shadow-sm">
-                      <p className="text-xs opacity-40 mb-2">Ваш заказ</p>
-                      {cart.map((item) => (
-                        <div key={item.product.id} className="flex justify-between text-sm py-1">
-                          <span>{item.product.name} × {item.qty}</span>
-                          <span className="font-bold">{item.product.price * item.qty} ₽</span>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-bold truncate">{item.product.name}</h4>
+                        <p className="text-xs opacity-40">{item.product.sku}</p>
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="text-sm font-bold">{(item.product.price * item.qty).toLocaleString('ru-RU')} ₽</span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                if (item.qty <= 1) removeFromCart(item.product.id);
+                                else {
+                                  // Decrease qty by removing and re-adding with qty-1
+                                  removeFromCart(item.product.id);
+                                  for (let n = 0; n < item.qty - 1; n++) addToCart(item.product, item.colorIndex);
+                                }
+                              }}
+                              aria-label="Убрать одну штуку"
+                              className="w-7 h-7 rounded-full border border-primary/10 flex items-center justify-center hover:bg-primary/5 transition-colors"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <span className="text-sm font-bold w-5 text-center">{item.qty}</span>
+                            <button
+                              onClick={() => addToCart(item.product, item.colorIndex)}
+                              aria-label="Добавить ещё одну"
+                              className="w-7 h-7 rounded-full border border-primary/10 flex items-center justify-center hover:bg-primary/5 transition-colors"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
                         </div>
-                      ))}
-                      <div className="border-t border-primary/5 mt-2 pt-2 flex justify-between font-bold">
-                        <span>Итого</span>
-                        <span>{total} ₽</span>
                       </div>
-                    </div>
-
-                    {/* Legal consents — required terms box + optional marketing box, kept separate */}
-                    <div className="space-y-2">
-                      <ConsentCheckbox
-                        id="cart-terms"
-                        checked={termsAccepted}
-                        invalid={termsTouched && !termsAccepted}
-                        onChange={(v) => {
-                          setTermsAccepted(v);
-                          if (v && submitError === CONSENT_ERRORS.terms) setSubmitError('');
-                        }}
-                      >
-                        <TermsConsentText />
-                      </ConsentCheckbox>
-                      {termsTouched && !termsAccepted && (
-                        <p className="text-[11px] text-red-500 px-2">{CONSENT_ERRORS.terms}</p>
-                      )}
-                      <ConsentCheckbox id="cart-marketing" checked={marketingConsent} onChange={setMarketingConsent}>
-                        <MarketingConsentText />
-                      </ConsentCheckbox>
-                    </div>
-                  </motion.div>
-                )}
-
-                {step === 'done' && (
-                  <motion.div
-                    key="done"
-                    initial={{ opacity: 0, scale: 0.98 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="py-2"
-                  >
-                    <OrderAccepted
-                      orderId={orderId}
-                      lines={acceptedLines}
-                      total={acceptedTotal}
-                      onOpenChat={handleGoToChat}
-                    />
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    </motion.div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            {step === 'cart' && cart.length > 0 && (
+            {cart.length > 0 && (
               <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-primary/5">
                 <div className="flex justify-between mb-4">
                   <span className="opacity-50">Итого</span>
-                  <span className="text-xl font-bold">{total} ₽</span>
+                  <span className="text-xl font-bold">{total.toLocaleString('ru-RU')} ₽</span>
                 </div>
                 <button
-                  onClick={() => setStep('form')}
+                  onClick={goToCheckout}
                   className="w-full bg-primary text-primary-inv rounded-full py-4 font-bold hover:scale-[1.02] active:scale-[0.98] transition-all"
                 >
                   Оформить заказ
@@ -332,26 +138,6 @@ export function CartSidebar() {
                     className="w-full py-3 mt-2"
                   />
                 )}
-              </div>
-            )}
-
-            {step === 'form' && (
-              <div className="p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] border-t border-primary/5">
-                {submitError && submitError !== CONSENT_ERRORS.terms && (
-                  <p className="text-xs text-red-500 mb-2 px-1">{submitError}</p>
-                )}
-                <button
-                  onClick={handlePlaceOrder}
-                  disabled={submitting || !formValid}
-                  className={cn(
-                    "w-full rounded-full py-4 font-bold transition-all",
-                    !submitting && formValid
-                      ? "bg-primary text-primary-inv hover:scale-[1.02] active:scale-[0.98]"
-                      : "bg-primary/20 text-primary/40 cursor-not-allowed"
-                  )}
-                >
-                  {submitting ? 'Отправляем…' : 'Отправить заказ'}
-                </button>
               </div>
             )}
           </motion.div>

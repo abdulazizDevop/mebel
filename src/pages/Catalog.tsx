@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Product } from '../data/products';
 import { cn } from '../utils/cn';
 import { ShoppingBag, SlidersHorizontal, Filter, ArrowRight, Compass, Check, X, Ruler, Send, Factory, Truck } from 'lucide-react';
@@ -14,7 +14,8 @@ import {
   PersonalDataConsentText,
   TermsConsentText,
 } from '../components/ConsentCheckbox';
-import { OrderAccepted } from '../components/OrderAccepted';
+import { categoryPath, orderSuccessPath, productPath } from '../utils/paths';
+import { getCategoryBySlug } from '../api';
 
 // categoryList is now built dynamically inside the component
 
@@ -98,7 +99,7 @@ function TumblerCard({ product, index, onOrder }: { product: Product; index: num
       className="group"
     >
       <motion.div whileTap={{ scale: 0.97 }}>
-        <Link to={`/product/${product.id}`}>
+        <Link to={productPath(product)}>
           <div
             className="relative aspect-square mb-4 bg-surface rounded-2xl overflow-hidden transition-shadow duration-300"
             style={{
@@ -172,7 +173,6 @@ function CustomOrderForm() {
   const [height, setHeight] = useState('');
   const [depth, setDepth] = useState('');
   const [desc, setDesc] = useState('');
-  const [sentOrderId, setSentOrderId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [nameTouched, setNameTouched] = useState(false);
   const [phoneTouched, setPhoneTouched] = useState(false);
@@ -203,24 +203,10 @@ function CustomOrderForm() {
       marketing: marketingConsent,
     });
     setSubmitting(false);
-    if (id) setSentOrderId(id);
+    // Same «Заказ успешно отправлен» page as catalogue orders (the
+    // `custom_order` goal already fired inside placeCustomOrder).
+    if (id) navigate(orderSuccessPath(id));
   };
-
-  if (sentOrderId) {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-surface rounded-3xl shadow-sm p-6 sm:p-8 max-w-md mx-auto"
-      >
-        <OrderAccepted
-          orderId={sentOrderId}
-          customSummary={`Индивидуальный заказ — размеры ${width} × ${depth} × ${height} см`}
-          onOpenChat={() => navigate('/chat')}
-        />
-      </motion.div>
-    );
-  }
 
   return (
     <motion.form
@@ -335,10 +321,31 @@ function CustomOrderForm() {
 }
 
 export function Catalog() {
-  const { addToCart, allProducts: products, recommendations, allCategories: storeCats } = useStore();
+  const { addToCart, allProducts: products, recommendations, allCategories: storeCats, categories } = useStore();
+  const { categorySlug } = useParams<{ categorySlug?: string }>();
+  const navigate = useNavigate();
   const categoryList = storeCats.map((cat) => ({ key: cat, label: cat }));
   const [showOrderToast, setShowOrderToast] = useState(false);
-  const [activeCategory, setActiveCategory] = useState('Все');
+
+  // The active category lives in the URL (/catalog/<slug>) so every section
+  // has a shareable, indexable address. An unknown slug is resolved through
+  // the API (renamed category → its new slug) or falls back to the full list.
+  const matched = categorySlug ? categories.find((c) => c.slug === categorySlug) : undefined;
+  const activeCategory = categorySlug ? (matched?.name ?? 'Все') : 'Все';
+  useEffect(() => {
+    if (!categorySlug || matched || categories.length === 0) return;
+    getCategoryBySlug(categorySlug)
+      .then((dto) => navigate(categoryPath(dto.slug), { replace: true }))
+      .catch(() => navigate('/catalog', { replace: true }));
+  }, [categorySlug, matched, categories.length, navigate]);
+  const setActiveCategory = (name: string) => {
+    if (name === 'Все') {
+      navigate('/catalog');
+      return;
+    }
+    const cat = categories.find((c) => c.name === name);
+    navigate(cat ? categoryPath(cat.slug) : '/catalog');
+  };
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'none' | 'asc' | 'desc'>('none');
@@ -467,7 +474,7 @@ export function Catalog() {
             return (
               <Link
                 key={product.id}
-                to={`/product/${product.id}`}
+                to={productPath(product)}
                 className="flex-shrink-0 w-32 sm:w-44 snap-start group"
               >
                 <div className="aspect-square bg-surface rounded-2xl overflow-hidden shadow-sm mb-3 group-hover:shadow-md transition-shadow">

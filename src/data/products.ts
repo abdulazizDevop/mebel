@@ -9,6 +9,10 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  /** URL pieces for /catalog/{categorySlug}/{slug}; absent on legacy cached
+   *  rows and order snapshots → utils/paths.ts falls back to /product/{id}. */
+  slug?: string;
+  categorySlug?: string;
   price: number;
   purchasePrice?: number;
   image: string;

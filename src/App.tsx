@@ -5,6 +5,9 @@ import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { Catalog } from './pages/Catalog';
 import { ProductDetail } from './pages/ProductDetail';
+import { LegacyProductRedirect } from './pages/LegacyProductRedirect';
+import { Order } from './pages/Order';
+import { OrderSuccess } from './pages/OrderSuccess';
 import { Favorites } from './pages/Favorites';
 import { Profile } from './pages/Profile';
 import { Admin } from './pages/Admin';
@@ -47,8 +50,14 @@ function AnimatedRoutes() {
       >
         <Routes location={location}>
           <Route path="/" element={<Home />} />
+          {/* Pretty URLs: /catalog, /catalog/<category>, /catalog/<category>/<product> */}
           <Route path="/catalog" element={<Catalog />} />
-          <Route path="/product/:id" element={<ProductDetail />} />
+          <Route path="/catalog/:categorySlug" element={<Catalog />} />
+          <Route path="/catalog/:categorySlug/:productSlug" element={<ProductDetail />} />
+          {/* Pre-slug links (QR codes, WhatsApp, business cards) keep working. */}
+          <Route path="/product/:id" element={<LegacyProductRedirect />} />
+          <Route path="/order" element={<Order />} />
+          <Route path="/order/success/:id" element={<OrderSuccess />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/admin" element={<Admin />} />
