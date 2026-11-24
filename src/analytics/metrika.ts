@@ -29,36 +29,58 @@ export function isMetrikaLoaded(): boolean {
   return loaded;
 }
 
+/**
+ * Mirrors the snippet Метрика gives in the counter settings (2026 version).
+ *
+ * The script URL MUST carry `?id=<counter>`: with `ssr: true` in init, a bare
+ * `tag.js` never consumes the `ym(...)` queue — no page views, no goals.
+ * That was the cause of «0 визитов» (verified 2026-11-24 in headless Chrome:
+ * bare tag.js + ssr → no /watch requests; tag.js?id= + ssr → hits sent).
+ */
 export function loadMetrika(): void {
   if (!COUNTER_ID || loaded || typeof window === 'undefined') return;
   loaded = true;
 
+  const src = `https://mc.yandex.ru/metrika/tag.js?id=${COUNTER_ID}`;
   if (!window.ym) {
-    const ym: YmFn = function (...args: unknown[]) {
-      (ym.a = ym.a || []).push(args);
+    // Same stub as the official snippet: queue the raw `arguments` objects.
+    const ym: YmFn = function () {
+      // eslint-disable-next-line prefer-rest-params
+      (ym.a = ym.a || []).push(arguments);
     };
     ym.l = Date.now();
     window.ym = ym;
   }
-  const script = document.createElement('script');
-  script.async = true;
-  script.src = 'https://mc.yandex.ru/metrika/tag.js';
-  document.head.appendChild(script);
+  if (!Array.from(document.scripts).some((s) => s.src === src)) {
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = src;
+    document.head.appendChild(script);
+  }
 
   window.ym(COUNTER_ID, 'init', {
     ssr: true,
-    clickmap: true,
-    trackLinks: true,
-    accurateTrackBounce: true,
-    ecommerce: 'dataLayer',
     webvisor: WEBVISOR,
+    clickmap: true,
+    ecommerce: 'dataLayer',
+    referrer: document.referrer,
+    url: window.location.href,
+    accurateTrackBounce: true,
+    trackLinks: true,
   });
+  lastHitUrl = window.location.href;
 }
 
-/** SPA navigation → page view. No-op until the counter is loaded. */
+let lastHitUrl = '';
+
+/** SPA navigation → page view. No-op until the counter is loaded; skips the
+ *  URL that init already counted, so the first screen is never doubled. */
 export function metrikaHit(url: string): void {
   if (!loaded || !window.ym) return;
-  window.ym(COUNTER_ID, 'hit', url);
+  const absolute = new URL(url, window.location.origin).href;
+  if (absolute === lastHitUrl) return;
+  window.ym(COUNTER_ID, 'hit', absolute, { referer: lastHitUrl || document.referrer });
+  lastHitUrl = absolute;
 }
 
 /** Conversion goal. No-op without consent. The two goals the owner creates in

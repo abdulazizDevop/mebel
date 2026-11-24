@@ -18,6 +18,10 @@ type Choice = { analytics: boolean; marketing: boolean };
 /** Persist locally, mirror to the backend ConsentLog, start/stop optional tech. */
 async function applyChoice(choice: Choice, source: 'cookie_banner' | 'cookie_settings', previous: CookiePrefs | null) {
   writeCookiePrefs(choice);
+  // Consent is given at the click; the server log below is evidence, not a
+  // gate — start the counter now so the current page view is never lost
+  // while those requests are in flight (or if they fail).
+  if (choice.analytics) loadMetrika();
   const requestId = getVisitorId();
   await Promise.allSettled([
     recordConsent({
@@ -35,9 +39,7 @@ async function applyChoice(choice: Choice, source: 'cookie_banner' | 'cookie_set
       document_version: LEGAL_VERSION,
     }),
   ]);
-  if (choice.analytics) {
-    loadMetrika();
-  } else if (previous?.analytics && isMetrikaLoaded()) {
+  if (!choice.analytics && previous?.analytics && isMetrikaLoaded()) {
     // A loaded counter can't be unloaded in place — a reload drops it.
     window.location.reload();
   }
